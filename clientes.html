@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Caixa Clientes · Breda Advocacia</title>
+  <meta name="theme-color" content="#0a2540" />
+  <link rel="manifest" href="./assets/manifest-clientes.json" />
+  <link rel="icon" href="./assets/icons/icon-192-clientes.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192-clientes.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/style.css" />
+  <script>
+    window.CAIXA_CONFIG = {
+      aba: "saidas",
+      titulo: "Caixa Clientes",
+      subtitulo: "Despesas e Saídas",
+    };
+  </script>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-name">Breda Advocacia</div>
+      <div class="brand-sub">Holding · Administração Patrimonial</div>
+    </div>
+    <div class="app-title">
+      <div>
+        <small id="app-titulo-sub">Despesas e Saídas</small>
+        <span id="app-titulo-principal">Caixa Clientes</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-recarregar" title="Recarregar dados">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.4M3 12a9 9 0 0 1 15.5-6.4M21 5v5h-5M3 19v-5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-exportar" title="Exportar CSV">
+        <svg viewBox="0 0 24 24"><path d="M12 3v14M5 12l7 7 7-7M5 21h14"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-config" title="Configurações">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="section-title">Painel</div>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">Despesas do Mês</div>
+      <div class="kpi-value" id="kpi-mes">R$ 0,00</div>
+      <div class="kpi-sub" id="kpi-mes-sub">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Acumulado no Ano</div>
+      <div class="kpi-value" id="kpi-ano">R$ 0,00</div>
+      <div class="kpi-sub">desde 1º de janeiro</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Período Filtrado</div>
+      <div class="kpi-value" id="kpi-total">R$ 0,00</div>
+      <div class="kpi-sub" id="kpi-qtd-sub"><span id="kpi-qtd">0</span> lançamentos</div>
+    </div>
+  </div>
+
+  <div class="section-title">Análise</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Evolução Mensal (últimos 12 meses)</h3>
+      <canvas id="chart-evolucao"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Distribuição por Categoria</h3>
+      <canvas id="chart-categorias"></canvas>
+    </div>
+  </div>
+
+  <div class="section-title">Filtros</div>
+  <div class="filtros-card">
+    <div class="filtros-grid">
+      <div class="field">
+        <label>Ano</label>
+        <select id="filtro-ano"></select>
+      </div>
+      <div class="field">
+        <label>Mês</label>
+        <select id="filtro-mes"></select>
+      </div>
+      <div class="field">
+        <label>Busca por descrição</label>
+        <input id="filtro-busca" type="text" placeholder="ex: salário, vivo, condomínio…" />
+      </div>
+      <div class="field">
+        <button class="btn btn-ghost" id="btn-limpar">Limpar filtros</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div id="loader" class="loader">
+    <div class="spinner"></div>
+    <p>Carregando lançamentos…</p>
+  </div>
+
+  <div id="tabela-card" class="tabela-card" style="display:none">
+    <div class="tabela-head">
+      <h2>Lançamentos</h2>
+      <span class="meta" id="tabela-meta">—</span>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px">Data</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th style="text-align:right; width:160px">Valor</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<button class="fab" id="fab-novo">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  Nova despesa
+</button>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modal-titulo">Nova despesa</h2>
+      <button class="close-btn" id="btn-fechar-modal">×</button>
+    </div>
+    <form id="modal-form" autocomplete="off">
+      <input type="hidden" id="modal-id" />
+      <div class="modal-body">
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="modal-data" required />
+        </div>
+        <div class="field">
+          <label>Descrição</label>
+          <textarea id="modal-desc" rows="2" required placeholder="ex: VIVO mês 06"></textarea>
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input type="number" id="modal-valor" step="0.01" min="0" required placeholder="0,00" />
+        </div>
+        <div class="field">
+          <label>Categoria</label>
+          <select id="modal-cat" required></select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-danger" id="btn-deletar" style="display:none">Excluir</button>
+        <button type="button" class="btn btn-ghost" id="btn-cancelar">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>Configurações</h2>
+    <button class="icon-btn" id="btn-fechar-drawer">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>URL da API (Google Apps Script)</label>
+      <input id="drawer-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+      <small>Cole aqui a URL gerada no Deploy do Apps Script. Esta URL é a "ponte" entre o app e sua planilha do Google. Veja o passo-a-passo em tools/caixa-apps/apps-script/INSTRUCOES.md.</small>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-primary" id="btn-salvar-config" style="width:100%">Salvar e recarregar</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
