@@ -1,13 +1,15 @@
 /* Service Worker — Caixa Breda Advocacia
    Estratégia: network-first para APIs, cache-first para assets estáticos */
-const CACHE = "caixa-breda-v1";
+const CACHE = "caixa-breda-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./escritorio.html",
   "./clientes.html",
+  "./painel.html",
   "./assets/style.css",
   "./assets/app.js",
+  "./assets/painel.js",
 ];
 
 self.addEventListener("install", (ev) => {

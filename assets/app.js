@@ -1,5 +1,5 @@
-/* Caixa Breda Advocacia — App unificado (entradas/saidas)
-   Espera-se que cada HTML defina antes:
+/* Caixa Breda Advocacia v2 — App unificado (entradas/saidas)
+   Cada HTML define antes:
      window.CAIXA_CONFIG = { aba: "entradas" | "saidas", titulo: "...", subtitulo: "..." }
 */
 (function () {
@@ -7,6 +7,7 @@
 
   const CFG = window.CAIXA_CONFIG || { aba: "entradas" };
   const LS_KEY_URL = "caixaBredaApiUrl";
+  const LS_KEY_TOKEN = "caixaBredaToken";
   const LS_KEY_CACHE = `caixaBredaCache_${CFG.aba}`;
 
   const MESES_PT = [
@@ -21,8 +22,10 @@
     filtroCategoria: null,
     filtroBusca: "",
     apiUrl: localStorage.getItem(LS_KEY_URL) || "",
+    token: localStorage.getItem(LS_KEY_TOKEN) || "",
     chartEvolucao: null,
     chartCategorias: null,
+    anexosPendentes: [], // arquivos selecionados no modal antes de salvar
   };
 
   // ----------------- HELPERS -----------------
@@ -38,6 +41,13 @@
     return `${d}/${m}/${y}`;
   };
 
+  const fmtBytes = (n) => {
+    if (!n) return "";
+    if (n < 1024) return n + "B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + "KB";
+    return (n / 1024 / 1024).toFixed(1) + "MB";
+  };
+
   const toast = (msg, isError = false) => {
     const el = $("#toast");
     el.textContent = msg;
@@ -47,10 +57,19 @@
     toast._t = setTimeout(() => el.classList.remove("show"), 2800);
   };
 
+  const escapeHtml = (s) => {
+    if (s == null) return "";
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  };
+
   // ----------------- API -----------------
   async function apiGet(params = {}) {
-    if (!state.apiUrl) throw new Error("Configure a URL da API em ⚙ no topo.");
+    if (!state.apiUrl) throw new Error("Configure a URL da API.");
+    if (!state.token) throw new Error("Faça login com sua senha.");
     const url = new URL(state.apiUrl);
+    url.searchParams.set("token", state.token);
     url.searchParams.set("aba", CFG.aba);
     Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
     const r = await fetch(url.toString(), { method: "GET", redirect: "follow" });
@@ -59,17 +78,64 @@
     return data;
   }
 
-  async function apiPost(acao, lancamento) {
-    if (!state.apiUrl) throw new Error("Configure a URL da API em ⚙ no topo.");
+  async function apiPost(acao, payload = {}) {
+    if (!state.apiUrl) throw new Error("Configure a URL da API.");
+    if (!state.token) throw new Error("Faça login com sua senha.");
+    const body = Object.assign({ aba: CFG.aba, acao, token: state.token }, payload);
     const r = await fetch(state.apiUrl, {
       method: "POST",
       redirect: "follow",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // evita preflight CORS
-      body: JSON.stringify({ aba: CFG.aba, acao, lancamento }),
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(body),
     });
     const data = await r.json();
     if (!data.ok) throw new Error(data.erro || "Erro na API");
     return data;
+  }
+
+  async function apiUpload(arquivo) {
+    return apiPost("upload", { arquivo });
+  }
+
+  // ----------------- LOGIN -----------------
+  function abrirLogin(msg) {
+    if (msg) $("#login-msg").textContent = msg;
+    $("#login-url").value = state.apiUrl;
+    $("#login-senha").value = "";
+    $("#login-overlay").classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
+  function fecharLogin() {
+    $("#login-overlay").classList.remove("open");
+    document.body.style.overflow = "";
+  }
+  async function fazerLogin(ev) {
+    ev.preventDefault();
+    const url = $("#login-url").value.trim();
+    const senha = $("#login-senha").value.trim();
+    if (!url || !senha) {
+      $("#login-msg").textContent = "Preencha URL e senha.";
+      return;
+    }
+    // Testar com um GET rápido
+    state.apiUrl = url;
+    state.token = senha;
+    try {
+      await apiGet();
+      localStorage.setItem(LS_KEY_URL, url);
+      localStorage.setItem(LS_KEY_TOKEN, senha);
+      fecharLogin();
+      carregar();
+    } catch (err) {
+      state.token = "";
+      $("#login-msg").textContent = "❌ " + err.message;
+    }
+  }
+  function logout() {
+    localStorage.removeItem(LS_KEY_TOKEN);
+    state.token = "";
+    state.dados = [];
+    abrirLogin("Sessão encerrada. Entre novamente.");
   }
 
   // ----------------- CARREGAMENTO -----------------
@@ -84,7 +150,11 @@
       state.dados = res.dados || [];
       localStorage.setItem(LS_KEY_CACHE, JSON.stringify({ ts: Date.now(), dados: state.dados }));
     } catch (err) {
-      // Tentar cache
+      if (err.message.includes("Senha inválida") || err.message.includes("login") || err.message.includes("token")) {
+        abrirLogin(err.message);
+        loader.style.display = "none";
+        return;
+      }
       const cache = localStorage.getItem(LS_KEY_CACHE);
       if (cache) {
         state.dados = JSON.parse(cache).dados || [];
@@ -119,11 +189,9 @@
     const selAno = $("#filtro-ano");
     selAno.innerHTML = '<option value="">Todos os anos</option>' +
       anos.map((a) => `<option value="${a}">${a}</option>`).join("");
-
     const selMes = $("#filtro-mes");
     selMes.innerHTML = '<option value="">Todos os meses</option>' +
       MESES_PT.map((nome, i) => `<option value="${i + 1}">${nome}</option>`).join("");
-
     if (state.filtroAno) selAno.value = state.filtroAno;
     if (state.filtroMes) selMes.value = state.filtroMes;
   }
@@ -132,7 +200,7 @@
   function render() {
     const filtrados = aplicarFiltros();
     renderKPIs(filtrados);
-    renderChips(filtrados);
+    renderChips();
     renderTabela(filtrados);
     renderGraficos(filtrados);
   }
@@ -142,7 +210,6 @@
     $("#kpi-total").textContent = fmtBRL(totalPeriodo);
     $("#kpi-qtd").textContent = filtrados.length.toLocaleString("pt-BR");
 
-    // Mês atual (do dispositivo) vs mês anterior
     const now = new Date();
     const yAtual = now.getFullYear();
     const mAtual = now.getMonth() + 1;
@@ -174,15 +241,12 @@
     $("#kpi-ano").textContent = fmtBRL(totAno);
   }
 
-  function renderChips(filtrados) {
+  function renderChips() {
     const cats = Array.from(new Set(state.dados.map((x) => x.categoria))).sort();
     const wrap = $("#chips");
-    wrap.innerHTML = cats
-      .map(
-        (c) =>
-          `<button class="chip ${state.filtroCategoria === c ? "active" : ""}" data-cat="${c}">${c}</button>`
-      )
-      .join("");
+    wrap.innerHTML = cats.map(
+      (c) => `<button class="chip ${state.filtroCategoria === c ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+    ).join("");
     $$(".chip", wrap).forEach((btn) => {
       btn.addEventListener("click", () => {
         state.filtroCategoria = state.filtroCategoria === btn.dataset.cat ? null : btn.dataset.cat;
@@ -206,17 +270,19 @@
         </div>
       </td></tr>`;
     } else {
-      tbody.innerHTML = ordenados
-        .map(
-          (x) => `
-        <tr data-id="${x.id}">
+      tbody.innerHTML = ordenados.map((x) => {
+        const temAnexos = Array.isArray(x.anexos) && x.anexos.length > 0;
+        const clipIcon = temAnexos
+          ? `<span class="clip-icon" title="${x.anexos.length} anexo(s)">📎 ${x.anexos.length}</span>`
+          : "";
+        return `
+        <tr data-id="${escapeHtml(x.id)}">
           <td class="col-data">${fmtData(x.data)}</td>
-          <td class="col-desc">${escapeHtml(x.descricao)}</td>
+          <td class="col-desc">${escapeHtml(x.descricao)} ${clipIcon}</td>
           <td class="col-cat"><span class="pill">${escapeHtml(x.categoria || "—")}</span></td>
           <td class="col-valor">${fmtBRL(x.valor)}</td>
-        </tr>`
-        )
-        .join("");
+        </tr>`;
+      }).join("");
       $$("#tabela-body tr").forEach((tr) => {
         tr.addEventListener("click", () => abrirModalEdicao(tr.dataset.id));
       });
@@ -226,21 +292,11 @@
     )}`;
   }
 
-  function escapeHtml(s) {
-    if (s == null) return "";
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
   // ----------------- GRÁFICOS -----------------
   function renderGraficos(filtrados) {
     if (typeof Chart === "undefined") return;
-
-    // Evolução mensal (últimos 12 meses dos filtrados ou do total)
     const base = filtrados.length > 0 ? filtrados : state.dados;
+
     const buckets = {};
     base.forEach((x) => {
       if (!x.ano || !x.mes) return;
@@ -258,29 +314,20 @@
     if (state.chartEvolucao) state.chartEvolucao.destroy();
     state.chartEvolucao = new Chart(ctx1, {
       type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            data: values,
-            backgroundColor: "rgba(30, 58, 95, 0.85)",
-            borderColor: "#c9a961",
-            borderWidth: 1,
-            borderRadius: 4,
-          },
-        ],
-      },
+      data: { labels, datasets: [{
+        data: values,
+        backgroundColor: "rgba(30, 58, 95, 0.85)",
+        borderColor: "#c9a961",
+        borderWidth: 1,
+        borderRadius: 4,
+      }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
           y: {
-            ticks: {
-              callback: (v) => "R$ " + (v / 1000).toFixed(0) + "k",
-              font: { size: 10 },
-              color: "#5a6573",
-            },
+            ticks: { callback: (v) => "R$ " + (v / 1000).toFixed(0) + "k", font: { size: 10 }, color: "#5a6573" },
             grid: { color: "#f0eee9" },
           },
           x: { ticks: { font: { size: 10 }, color: "#5a6573" }, grid: { display: false } },
@@ -288,7 +335,6 @@
       },
     });
 
-    // Categorias (donut)
     const catBuckets = {};
     base.forEach((x) => {
       catBuckets[x.categoria || "—"] = (catBuckets[x.categoria || "—"] || 0) + (x.valor || 0);
@@ -301,37 +347,29 @@
     if (state.chartCategorias) state.chartCategorias.destroy();
     state.chartCategorias = new Chart(ctx2, {
       type: "doughnut",
-      data: {
-        labels: catLabels,
-        datasets: [
-          {
-            data: catValues,
-            backgroundColor: catLabels.map((_, i) => palette[i % palette.length]),
-            borderWidth: 0,
-          },
-        ],
-      },
+      data: { labels: catLabels, datasets: [{
+        data: catValues,
+        backgroundColor: catLabels.map((_, i) => palette[i % palette.length]),
+        borderWidth: 0,
+      }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         cutout: "62%",
-        plugins: {
-          legend: {
-            position: "right",
-            labels: { font: { size: 10 }, color: "#5a6573", boxWidth: 10 },
-          },
-        },
+        plugins: { legend: { position: "right", labels: { font: { size: 10 }, color: "#5a6573", boxWidth: 10 } } },
       },
     });
   }
 
-  // ----------------- MODAL -----------------
+  // ----------------- MODAL LANÇAMENTO -----------------
   function abrirModalNovo() {
     $("#modal-titulo").textContent = "Novo lançamento";
     $("#modal-form").reset();
     $("#modal-id").value = "";
     $("#modal-data").value = new Date().toISOString().slice(0, 10);
     popularSelectCategorias();
+    state.anexosPendentes = [];
+    renderAnexos([]);
     $("#btn-deletar").style.display = "none";
     $("#modal").classList.add("open");
   }
@@ -346,6 +384,8 @@
     $("#modal-desc").value = x.descricao || "";
     $("#modal-valor").value = x.valor || "";
     $("#modal-cat").value = x.categoria || "";
+    state.anexosPendentes = (x.anexos || []).slice();
+    renderAnexos(state.anexosPendentes);
     $("#btn-deletar").style.display = "inline-block";
     $("#modal").classList.add("open");
   }
@@ -361,6 +401,67 @@
 
   function fecharModal() { $("#modal").classList.remove("open"); }
 
+  // ----------------- ANEXOS -----------------
+  function renderAnexos(lista) {
+    const wrap = $("#modal-anexos-lista");
+    if (!lista || lista.length === 0) {
+      wrap.innerHTML = `<div class="anexos-vazio">Nenhum anexo. Use o botão "Adicionar arquivo" abaixo.</div>`;
+      return;
+    }
+    wrap.innerHTML = lista.map((a, i) => `
+      <div class="anexo-item">
+        <span class="anexo-icon">📎</span>
+        <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="anexo-nome">${escapeHtml(a.nome)}</a>
+        <span class="anexo-meta">${fmtBytes(a.tamanho)}</span>
+        <button type="button" class="anexo-remover" data-i="${i}" title="Remover">×</button>
+      </div>
+    `).join("");
+    $$(".anexo-remover", wrap).forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.i, 10);
+        state.anexosPendentes.splice(i, 1);
+        renderAnexos(state.anexosPendentes);
+      });
+    });
+  }
+
+  async function uploadArquivos(files) {
+    if (!files || !files.length) return;
+    const status = $("#anexo-status");
+    status.textContent = `Enviando 0/${files.length}…`;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // Limite de 25MB no Apps Script
+      if (file.size > 25 * 1024 * 1024) {
+        toast(`"${file.name}" > 25MB — pulado.`, true);
+        continue;
+      }
+      try {
+        const base64 = await fileToBase64(file);
+        const res = await apiUpload({
+          nome: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64: base64,
+        });
+        state.anexosPendentes.push(res.arquivo);
+        status.textContent = `Enviado ${i + 1}/${files.length}`;
+      } catch (err) {
+        toast(`Falha em "${file.name}": ${err.message}`, true);
+      }
+    }
+    status.textContent = "";
+    renderAnexos(state.anexosPendentes);
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
   async function salvarLancamento(ev) {
     ev.preventDefault();
     const id = $("#modal-id").value;
@@ -369,6 +470,7 @@
       descricao: $("#modal-desc").value.trim(),
       valor: parseFloat($("#modal-valor").value),
       categoria: $("#modal-cat").value,
+      anexos: state.anexosPendentes,
     };
     if (!lanc.data || !lanc.descricao || isNaN(lanc.valor)) {
       toast("Preencha data, descrição e valor.", true);
@@ -377,12 +479,12 @@
     try {
       if (id) {
         lanc.id = id;
-        const r = await apiPost("editar", lanc);
+        const r = await apiPost("editar", { lancamento: lanc });
         const idx = state.dados.findIndex((x) => x.id === id);
         if (idx >= 0) state.dados[idx] = r.lancamento;
         toast("Lançamento atualizado.");
       } else {
-        const r = await apiPost("criar", lanc);
+        const r = await apiPost("criar", { lancamento: lanc });
         state.dados.push(r.lancamento);
         toast("Lançamento criado.");
       }
@@ -398,9 +500,9 @@
   async function deletarLancamento() {
     const id = $("#modal-id").value;
     if (!id) return;
-    if (!confirm("Excluir este lançamento? Não dá pra desfazer.")) return;
+    if (!confirm("Excluir este lançamento e os anexos vinculados? Não dá pra desfazer.")) return;
     try {
-      await apiPost("deletar", { id });
+      await apiPost("deletar", { lancamento: { id } });
       state.dados = state.dados.filter((x) => x.id !== id);
       toast("Lançamento removido.");
       fecharModal();
@@ -421,49 +523,8 @@
     $("#drawer").classList.remove("open");
     $("#drawer-backdrop").classList.remove("open");
   }
-  function salvarConfig() {
-    const url = $("#drawer-url").value.trim();
-    state.apiUrl = url;
-    localStorage.setItem(LS_KEY_URL, url);
-    toast("URL salva. Recarregando dados…");
-    fecharDrawer();
-    carregar();
-  }
 
-  // ----------------- INIT -----------------
-  function bindEvents() {
-    $("#filtro-ano").addEventListener("change", (e) => { state.filtroAno = e.target.value || null; render(); });
-    $("#filtro-mes").addEventListener("change", (e) => { state.filtroMes = e.target.value || null; render(); });
-    $("#filtro-busca").addEventListener("input", (e) => { state.filtroBusca = e.target.value; render(); });
-    $("#btn-limpar").addEventListener("click", () => {
-      state.filtroAno = null;
-      state.filtroMes = null;
-      state.filtroCategoria = null;
-      state.filtroBusca = "";
-      $("#filtro-ano").value = "";
-      $("#filtro-mes").value = "";
-      $("#filtro-busca").value = "";
-      render();
-    });
-
-    $("#fab-novo").addEventListener("click", abrirModalNovo);
-    $("#btn-fechar-modal").addEventListener("click", fecharModal);
-    $("#btn-cancelar").addEventListener("click", fecharModal);
-    $("#btn-deletar").addEventListener("click", deletarLancamento);
-    $("#modal-form").addEventListener("submit", salvarLancamento);
-    $("#modal").addEventListener("click", (e) => {
-      if (e.target.id === "modal") fecharModal();
-    });
-
-    $("#btn-config").addEventListener("click", abrirDrawer);
-    $("#btn-fechar-drawer").addEventListener("click", fecharDrawer);
-    $("#drawer-backdrop").addEventListener("click", fecharDrawer);
-    $("#btn-salvar-config").addEventListener("click", salvarConfig);
-    $("#btn-recarregar").addEventListener("click", carregar);
-
-    $("#btn-exportar").addEventListener("click", exportarCSV);
-  }
-
+  // ----------------- EXPORT CSV -----------------
   function exportarCSV() {
     const filtrados = aplicarFiltros();
     if (filtrados.length === 0) { toast("Nada para exportar.", true); return; }
@@ -481,34 +542,59 @@
     URL.revokeObjectURL(a.href);
   }
 
+  // ----------------- INIT -----------------
+  function bindEvents() {
+    $("#filtro-ano").addEventListener("change", (e) => { state.filtroAno = e.target.value || null; render(); });
+    $("#filtro-mes").addEventListener("change", (e) => { state.filtroMes = e.target.value || null; render(); });
+    $("#filtro-busca").addEventListener("input", (e) => { state.filtroBusca = e.target.value; render(); });
+    $("#btn-limpar").addEventListener("click", () => {
+      state.filtroAno = null; state.filtroMes = null;
+      state.filtroCategoria = null; state.filtroBusca = "";
+      $("#filtro-ano").value = ""; $("#filtro-mes").value = "";
+      $("#filtro-busca").value = "";
+      render();
+    });
+
+    $("#fab-novo").addEventListener("click", abrirModalNovo);
+    $("#btn-fechar-modal").addEventListener("click", fecharModal);
+    $("#btn-cancelar").addEventListener("click", fecharModal);
+    $("#btn-deletar").addEventListener("click", deletarLancamento);
+    $("#modal-form").addEventListener("submit", salvarLancamento);
+    $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") fecharModal(); });
+
+    // Anexos
+    $("#modal-anexo-input").addEventListener("change", (e) => {
+      uploadArquivos(Array.from(e.target.files));
+      e.target.value = "";
+    });
+
+    $("#btn-config").addEventListener("click", abrirDrawer);
+    $("#btn-fechar-drawer").addEventListener("click", fecharDrawer);
+    $("#drawer-backdrop").addEventListener("click", fecharDrawer);
+    $("#btn-logout").addEventListener("click", () => { fecharDrawer(); logout(); });
+    $("#btn-recarregar").addEventListener("click", carregar);
+    $("#btn-exportar").addEventListener("click", exportarCSV);
+
+    // Login
+    $("#login-form").addEventListener("submit", fazerLogin);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
-    // Aplicar título/subtítulo conforme app
     if (CFG.titulo) document.title = CFG.titulo + " · Breda Advocacia";
     $("#app-titulo-principal").textContent = CFG.titulo || "Caixa";
     $("#app-titulo-sub").textContent = CFG.subtitulo || "";
 
-    if (!state.apiUrl) {
-      // Sem URL → abrir drawer pra configurar
-      abrirDrawer();
+    bindEvents();
+
+    if (!state.apiUrl || !state.token) {
+      abrirLogin("Configure a URL e digite sua senha.");
       $("#loader").style.display = "none";
-      $("#tabela-card").style.display = "block";
-      $("#tabela-body").innerHTML = `<tr><td colspan="4">
-        <div class="empty-state">
-          <h3>Configure o backend</h3>
-          <p>Cole a URL do Web App do Google Apps Script no campo à direita para começar.</p>
-        </div>
-      </td></tr>`;
       return;
     }
-    bindEvents();
     carregar();
 
-    // PWA service worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./assets/sw.js").catch(() => {});
     }
   });
-
-  // Garantir bind mesmo no caminho sem-URL acima
-  document.addEventListener("DOMContentLoaded", () => setTimeout(bindEvents, 0));
 })();
