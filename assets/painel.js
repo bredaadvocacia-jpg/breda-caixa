@@ -353,6 +353,60 @@
     $("#tot-mar").style.fontSize = "14px";
   }
 
+  // ----------------- TROCAR SENHA -----------------
+  function abrirTrocarSenha() {
+    $("#trocar-form").reset();
+    $("#trocar-msg").textContent = "";
+    $("#trocar-msg").className = "trocar-msg";
+    $("#trocar-modal").classList.add("open");
+  }
+  function fecharTrocarSenha() { $("#trocar-modal").classList.remove("open"); }
+
+  async function salvarNovaSenha(ev) {
+    ev.preventDefault();
+    const atual = $("#trocar-atual").value.trim();
+    const nova = $("#trocar-nova").value.trim();
+    const conf = $("#trocar-confirma").value.trim();
+    const msg = $("#trocar-msg");
+    msg.className = "trocar-msg";
+
+    if (atual !== state.token) {
+      msg.textContent = "Senha atual incorreta.";
+      msg.classList.add("err"); return;
+    }
+    if (nova.length < 6) {
+      msg.textContent = "Nova senha precisa ter ao menos 6 caracteres.";
+      msg.classList.add("err"); return;
+    }
+    if (nova !== conf) {
+      msg.textContent = "A confirmação não bate com a nova senha.";
+      msg.classList.add("err"); return;
+    }
+    if (nova === atual) {
+      msg.textContent = "A nova senha precisa ser diferente da atual.";
+      msg.classList.add("err"); return;
+    }
+    msg.textContent = "Enviando…";
+    try {
+      const r = await fetch(state.apiUrl, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "trocar-senha", token: state.token, novaSenha: nova }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.erro);
+      state.token = nova;
+      localStorage.setItem(LS_KEY_TOKEN, nova);
+      msg.textContent = "✓ Senha alterada. Notificação enviada por email.";
+      msg.classList.add("ok");
+      setTimeout(() => { fecharTrocarSenha(); toast("Senha alterada com sucesso."); }, 1400);
+    } catch (err) {
+      msg.textContent = "Erro: " + err.message;
+      msg.classList.add("err");
+    }
+  }
+
   // ----------------- INIT -----------------
   document.addEventListener("DOMContentLoaded", () => {
     $("#filtro-ano").addEventListener("change", (e) => {
@@ -362,6 +416,15 @@
     $("#btn-recarregar").addEventListener("click", carregar);
     $("#btn-logout").addEventListener("click", logout);
     $("#login-form").addEventListener("submit", fazerLogin);
+
+    // Trocar senha
+    $("#btn-trocar-senha").addEventListener("click", abrirTrocarSenha);
+    $("#btn-fechar-trocar").addEventListener("click", fecharTrocarSenha);
+    $("#btn-cancelar-trocar").addEventListener("click", fecharTrocarSenha);
+    $("#trocar-form").addEventListener("submit", salvarNovaSenha);
+    $("#trocar-modal").addEventListener("click", (e) => {
+      if (e.target.id === "trocar-modal") fecharTrocarSenha();
+    });
 
     if (!state.apiUrl || !state.token) {
       abrirLogin("Configure a URL e digite sua senha.");

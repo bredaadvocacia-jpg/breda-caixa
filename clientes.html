@@ -193,15 +193,56 @@
   </div>
   <div class="drawer-body">
     <div class="field">
+      <label>Conta administradora</label>
+      <div class="info-row"><span id="drawer-email" class="info-val">…</span></div>
+      <small>Esse e-mail recebe notificações de troca de senha.</small>
+    </div>
+    <div class="field">
       <label>URL da API (Google Apps Script)</label>
       <input id="drawer-url" type="url" readonly />
-      <small>Para trocar URL ou senha, use o botão "Sair" abaixo e faça login novamente.</small>
     </div>
+    <button class="btn btn-primary" id="btn-trocar-senha" style="width:100%; margin-top:8px">
+      🔐 Trocar senha
+    </button>
   </div>
   <div class="drawer-foot">
-    <button class="btn btn-danger" id="btn-logout" style="width:100%">Sair / Trocar URL/senha</button>
+    <button class="btn btn-ghost" id="btn-logout" style="width:100%">Sair / Trocar URL ou conta</button>
   </div>
 </aside>
+
+<!-- MODAL TROCAR SENHA -->
+<div class="modal-backdrop" id="trocar-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Trocar senha</h2>
+      <button class="close-btn" id="btn-fechar-trocar">×</button>
+    </div>
+    <form id="trocar-form" autocomplete="off">
+      <div class="modal-body">
+        <div class="trocar-msg" id="trocar-msg"></div>
+        <div class="field">
+          <label>Senha atual</label>
+          <input id="trocar-atual" type="password" required autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>Nova senha (mín. 6 caracteres)</label>
+          <input id="trocar-nova" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Confirmar nova senha</label>
+          <input id="trocar-confirma" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <small style="display:block; color:var(--ink-mute); font-size:11px; margin-top:6px">
+          Uma notificação será enviada automaticamente para o e-mail da conta administradora.
+        </small>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="btn-cancelar-trocar">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Trocar senha</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- LOGIN OVERLAY -->
 <div class="login-overlay" id="login-overlay">

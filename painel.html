@@ -37,6 +37,9 @@
       <button class="icon-btn" id="btn-recarregar" title="Recarregar dados">
         <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.4M3 12a9 9 0 0 1 15.5-6.4M21 5v5h-5M3 19v-5h5"/></svg>
       </button>
+      <button class="icon-btn" id="btn-trocar-senha" title="Trocar senha">
+        <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </button>
       <button class="icon-btn" id="btn-logout" title="Sair">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
@@ -156,6 +159,40 @@
       </div>
       <button type="submit" class="btn btn-primary">Entrar</button>
       <small>A URL é a do Web App do Apps Script. A senha é a que você definiu na constante <code>SENHA_API</code> do Code.gs.</small>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL TROCAR SENHA -->
+<div class="modal-backdrop" id="trocar-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Trocar senha</h2>
+      <button class="close-btn" id="btn-fechar-trocar">×</button>
+    </div>
+    <form id="trocar-form" autocomplete="off">
+      <div class="modal-body">
+        <div class="trocar-msg" id="trocar-msg"></div>
+        <div class="field">
+          <label>Senha atual</label>
+          <input id="trocar-atual" type="password" required autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>Nova senha (mín. 6 caracteres)</label>
+          <input id="trocar-nova" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Confirmar nova senha</label>
+          <input id="trocar-confirma" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <small style="display:block; color:var(--ink-mute); font-size:11px; margin-top:6px">
+          Uma notificação será enviada automaticamente para o e-mail da conta administradora.
+        </small>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="btn-cancelar-trocar">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Trocar senha</button>
+      </div>
     </form>
   </div>
 </div>

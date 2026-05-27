@@ -514,14 +514,78 @@
   }
 
   // ----------------- DRAWER CONFIG -----------------
-  function abrirDrawer() {
+  async function abrirDrawer() {
     $("#drawer-url").value = state.apiUrl;
     $("#drawer").classList.add("open");
     $("#drawer-backdrop").classList.add("open");
+    // Buscar email do dono via API ?aba=info
+    try {
+      const url = new URL(state.apiUrl);
+      url.searchParams.set("token", state.token);
+      url.searchParams.set("aba", "info");
+      const r = await fetch(url.toString(), { method: "GET", redirect: "follow" });
+      const data = await r.json();
+      if (data.ok && data.emailOwner) {
+        $("#drawer-email").textContent = data.emailOwner;
+      }
+    } catch (e) {
+      $("#drawer-email").textContent = "—";
+    }
   }
   function fecharDrawer() {
     $("#drawer").classList.remove("open");
     $("#drawer-backdrop").classList.remove("open");
+  }
+
+  // ----------------- MODAL TROCAR SENHA -----------------
+  function abrirTrocarSenha() {
+    $("#trocar-form").reset();
+    $("#trocar-msg").textContent = "";
+    $("#trocar-modal").classList.add("open");
+  }
+  function fecharTrocarSenha() { $("#trocar-modal").classList.remove("open"); }
+
+  async function salvarNovaSenha(ev) {
+    ev.preventDefault();
+    const atual = $("#trocar-atual").value.trim();
+    const nova = $("#trocar-nova").value.trim();
+    const conf = $("#trocar-confirma").value.trim();
+    const msg = $("#trocar-msg");
+    msg.className = "trocar-msg";
+
+    if (atual !== state.token) {
+      msg.textContent = "Senha atual incorreta.";
+      msg.classList.add("err");
+      return;
+    }
+    if (nova.length < 6) {
+      msg.textContent = "Nova senha deve ter no mínimo 6 caracteres.";
+      msg.classList.add("err");
+      return;
+    }
+    if (nova !== conf) {
+      msg.textContent = "A confirmação não bate com a nova senha.";
+      msg.classList.add("err");
+      return;
+    }
+    if (nova === atual) {
+      msg.textContent = "A nova senha precisa ser diferente da atual.";
+      msg.classList.add("err");
+      return;
+    }
+    msg.textContent = "Enviando…";
+    try {
+      await apiPost("trocar-senha", { novaSenha: nova });
+      // Atualizar token local
+      state.token = nova;
+      localStorage.setItem(LS_KEY_TOKEN, nova);
+      msg.textContent = "✓ Senha alterada. Notificação enviada por email.";
+      msg.classList.add("ok");
+      setTimeout(() => { fecharTrocarSenha(); toast("Senha alterada com sucesso."); }, 1400);
+    } catch (err) {
+      msg.textContent = "Erro: " + err.message;
+      msg.classList.add("err");
+    }
   }
 
   // ----------------- EXPORT CSV -----------------
@@ -574,6 +638,13 @@
     $("#btn-logout").addEventListener("click", () => { fecharDrawer(); logout(); });
     $("#btn-recarregar").addEventListener("click", carregar);
     $("#btn-exportar").addEventListener("click", exportarCSV);
+
+    // Trocar senha
+    $("#btn-trocar-senha").addEventListener("click", () => { fecharDrawer(); abrirTrocarSenha(); });
+    $("#btn-fechar-trocar").addEventListener("click", fecharTrocarSenha);
+    $("#btn-cancelar-trocar").addEventListener("click", fecharTrocarSenha);
+    $("#trocar-form").addEventListener("submit", salvarNovaSenha);
+    $("#trocar-modal").addEventListener("click", (e) => { if (e.target.id === "trocar-modal") fecharTrocarSenha(); });
 
     // Login
     $("#login-form").addEventListener("submit", fazerLogin);

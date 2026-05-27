@@ -837,6 +837,33 @@ td.col-valor {
   letter-spacing: .5px;
 }
 
+/* ============ INFO ROW (drawer) ============ */
+.info-row {
+  padding: 9px 12px;
+  background: var(--line-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.info-val {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--navy-deep);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+/* ============ MSG DO MODAL TROCAR SENHA ============ */
+.trocar-msg {
+  font-size: 12px;
+  text-align: center;
+  padding: 0 0 12px;
+  min-height: 16px;
+  color: var(--ink-soft);
+  letter-spacing: .3px;
+}
+.trocar-msg.err { color: var(--neg); font-weight: 600; }
+.trocar-msg.ok { color: var(--pos); font-weight: 600; }
+
 /* ============ PRINT ============ */
 @media print {
   .app-header, .fab, .filtros-card, .drawer, .modal-backdrop { display: none !important; }
