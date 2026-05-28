@@ -1164,7 +1164,7 @@
     setupInstall();
     ativarTab(state.abaAtiva);
 
-    if (!state.apiUrl || !state.token) { abrirLogin("Configure URL e senha."); return; }
+    if (!state.apiUrl || !state.token) { abrirLogin(); return; }
     carregarTudo();
 
     if ("serviceWorker" in navigator) {
