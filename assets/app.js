@@ -883,6 +883,78 @@
     a.click(); URL.revokeObjectURL(a.href);
   }
 
+  // ====== PWA INSTALL ======
+  let deferredPrompt = null;
+
+  function setupInstall() {
+    const btn = $("#btn-instalar");
+    const hint = $("#instalar-hint");
+    const hintTxt = $("#instalar-hint-texto");
+
+    // Detecta se já está rodando como app instalado
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+                       || window.navigator.standalone === true;
+    if (isStandalone) {
+      btn.style.display = "block";
+      btn.textContent = "✓ Você já está usando o app instalado";
+      btn.disabled = true;
+      btn.style.opacity = ".6";
+      btn.style.cursor = "default";
+      return;
+    }
+
+    // Captura o evento de instalação (Chrome/Edge desktop, Android)
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btn.style.display = "block";
+    });
+
+    btn.addEventListener("click", async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          toast("App instalado ✓");
+          btn.style.display = "none";
+        }
+        deferredPrompt = null;
+      }
+    });
+
+    // Detecta Safari iOS (não tem beforeinstallprompt — mostra instruções)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isMacSafari = isSafari && /Mac/.test(navigator.userAgent);
+
+    if (isIOS) {
+      btn.style.display = "block";
+      btn.textContent = "📲 Instalar no iPhone/iPad";
+      btn.addEventListener("click", () => {
+        hint.style.display = "block";
+        hintTxt.innerHTML = `Toque no botão <strong>Compartilhar</strong> (□↑) na barra inferior do Safari, depois em <strong>Adicionar à Tela de Início</strong>.`;
+      });
+    } else if (isMacSafari) {
+      btn.style.display = "block";
+      btn.textContent = "📲 Instalar no Mac";
+      btn.addEventListener("click", () => {
+        hint.style.display = "block";
+        hintTxt.innerHTML = `No Safari (macOS), menu <strong>Arquivo → Adicionar à Dock</strong>. Pra mais opções, use Chrome ou Edge — eles instalam direto.`;
+      });
+    }
+    // Se nenhum dos casos disparou após 1.5s, mostra hint genérico
+    setTimeout(() => {
+      if (btn.style.display === "none") {
+        btn.style.display = "block";
+        btn.textContent = "📲 Como instalar como app?";
+        btn.addEventListener("click", () => {
+          hint.style.display = "block";
+          hintTxt.innerHTML = `Use o <strong>Chrome</strong> ou <strong>Edge</strong>: na barra de endereço aparece o ícone 🖥️↓ ("Instalar app"). Ou pelo menu (⋮) → "Instalar Caixa Breda".`;
+        });
+      }
+    }, 1500);
+  }
+
   // ====== INIT ======
   function bindEvents() {
     $$(".tab").forEach(t => t.addEventListener("click", () => ativarTab(t.dataset.tab)));
@@ -962,6 +1034,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     bindEvents();
+    setupInstall();
     ativarTab(state.abaAtiva);
 
     if (!state.apiUrl || !state.token) { abrirLogin("Configure URL e senha."); return; }
