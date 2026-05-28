@@ -980,6 +980,65 @@ td.col-valor.neg { color: var(--neg); }
   .field-inline { flex: 1; min-width: 120px; }
 }
 
+/* ============ SESSÕES ATIVAS ============ */
+.sessoes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.sessao-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  font-size: 12px;
+}
+.sessao-item.sessao-atual {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+.sessao-info { flex: 1; min-width: 0; }
+.sessao-disp {
+  font-weight: 500;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.sessao-tag {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.sessao-meta {
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 2px;
+}
+.sessao-revogar {
+  background: none;
+  border: none;
+  color: var(--neg);
+  font-size: 18px;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  padding: 0;
+}
+.sessao-revogar:hover { background: rgba(152,69,72,.1); }
+
 /* ============ PRINT ============ */
 @media print {
   .topbar, .fab, .filters, .chips, .modal-backdrop, .drawer, .drawer-backdrop, .chat-input-row { display: none !important; }

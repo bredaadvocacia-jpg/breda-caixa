@@ -69,39 +69,124 @@
     return data;
   }
 
-  // ====== LOGIN ======
+  // ====== LOGIN 2FA ======
   function abrirLogin(msg) {
+    setLoginStep(1);
     if (msg) {
       const el = $("#login-msg");
       el.textContent = msg;
-      el.classList.toggle("err", msg.startsWith("❌") || msg.toLowerCase().includes("inválid"));
+      el.classList.toggle("err", msg.toLowerCase().includes("inválid") || msg.toLowerCase().includes("erro") || msg.startsWith("❌"));
+    } else {
+      $("#login-msg").textContent = "";
+      $("#login-msg").className = "login-msg";
     }
     $("#login-url").value = state.apiUrl;
     $("#login-senha").value = "";
+    $("#login-codigo").value = "";
     $("#login-overlay").classList.add("open");
     document.body.style.overflow = "hidden";
   }
-  function fecharLogin() { $("#login-overlay").classList.remove("open"); document.body.style.overflow = ""; }
+  function fecharLogin() {
+    $("#login-overlay").classList.remove("open");
+    document.body.style.overflow = "";
+  }
 
-  async function fazerLogin(ev) {
+  function setLoginStep(n) {
+    $("#login-step1").style.display = n === 1 ? "block" : "none";
+    $("#login-step2").style.display = n === 2 ? "block" : "none";
+  }
+
+  async function loginStep1(ev) {
     ev.preventDefault();
     const url = $("#login-url").value.trim();
     const senha = $("#login-senha").value.trim();
-    if (!url || !senha) { abrirLogin("Preencha URL e senha."); return; }
+    if (!url || !senha) {
+      $("#login-msg").textContent = "Preencha URL e senha.";
+      $("#login-msg").className = "login-msg err";
+      return;
+    }
     state.apiUrl = url;
-    state.token = senha;
+    state._loginSenha = senha;  // guarda temporariamente até step2
+    const msg = $("#login-msg"); msg.className = "login-msg"; msg.textContent = "Enviando código…";
     try {
-      await apiGet({ aba: "info" });
+      const r = await fetch(url, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "login-step1", senha: senha }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.erro || "Erro");
+      state._codeId = data.codeId;
       localStorage.setItem(LS_URL, url);
-      localStorage.setItem(LS_TOK, senha);
+      setLoginStep(2);
+      msg.textContent = "Código enviado para " + (state._emailMascarado || "seu e-mail") + ". Verifique a caixa de entrada.";
+      $("#login-codigo").focus();
+    } catch (err) {
+      msg.textContent = "❌ " + err.message;
+      msg.className = "login-msg err";
+    }
+  }
+
+  async function loginStep2(ev) {
+    ev.preventDefault();
+    const codigo = $("#login-codigo").value.trim();
+    if (!/^\d{6}$/.test(codigo)) {
+      $("#login-msg").textContent = "Digite o código de 6 dígitos.";
+      $("#login-msg").className = "login-msg err";
+      return;
+    }
+    const msg = $("#login-msg"); msg.className = "login-msg"; msg.textContent = "Validando…";
+    try {
+      // Captura informação do dispositivo para registro
+      const dispositivo = (navigator.userAgentData && navigator.userAgentData.platform)
+        || (/iPhone|iPad/.test(navigator.userAgent) ? "iOS"
+           : /Android/.test(navigator.userAgent) ? "Android"
+           : /Mac/.test(navigator.userAgent) ? "Mac"
+           : /Windows/.test(navigator.userAgent) ? "Windows"
+           : "Desconhecido");
+      const r = await fetch(state.apiUrl, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "login-step2", codeId: state._codeId, codigo: codigo, dispositivo: dispositivo + " · " + navigator.language }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.erro || "Erro");
+      state.token = data.token;
+      localStorage.setItem(LS_TOK, data.token);
+      state._loginSenha = null;
+      state._codeId = null;
       fecharLogin();
       carregarTudo();
     } catch (err) {
-      state.token = "";
-      abrirLogin("❌ " + err.message);
+      msg.textContent = "❌ " + err.message;
+      msg.className = "login-msg err";
     }
   }
-  function logout() {
+
+  async function reenviarCodigo() {
+    if (!state._loginSenha) { setLoginStep(1); return; }
+    const msg = $("#login-msg"); msg.className = "login-msg"; msg.textContent = "Reenviando…";
+    try {
+      const r = await fetch(state.apiUrl, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "login-step1", senha: state._loginSenha }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.erro || "Erro");
+      state._codeId = data.codeId;
+      msg.textContent = "✓ Novo código enviado.";
+    } catch (err) {
+      msg.textContent = "❌ " + err.message;
+      msg.className = "login-msg err";
+    }
+  }
+
+  async function logout() {
+    try { await apiPost("logout"); } catch (e) {}
     localStorage.removeItem(LS_TOK);
     state.token = "";
     state.entradas = []; state.saidas = [];
@@ -642,6 +727,7 @@
       const r = await apiGet({ aba: "info" });
       $("#drawer-email").textContent = r.emailOwner || "—";
     } catch (e) { $("#drawer-email").textContent = "—"; }
+    carregarSessoes();
   }
   function fecharDrawer() { $("#drawer").classList.remove("open"); $("#drawer-backdrop").classList.remove("open"); }
 
@@ -653,17 +739,61 @@
     const nova = $("#trocar-nova").value.trim();
     const conf = $("#trocar-confirma").value.trim();
     const msg = $("#trocar-msg"); msg.className = "trocar-msg";
-    if (atual !== state.token) { msg.textContent = "Senha atual incorreta."; msg.classList.add("err"); return; }
     if (nova.length < 6) { msg.textContent = "Nova senha precisa ter 6+ caracteres."; msg.classList.add("err"); return; }
     if (nova !== conf) { msg.textContent = "Confirmação não bate."; msg.classList.add("err"); return; }
     if (nova === atual) { msg.textContent = "Senha nova precisa ser diferente da atual."; msg.classList.add("err"); return; }
     msg.textContent = "Enviando…";
     try {
-      await apiPost("trocar-senha", { novaSenha: nova });
-      state.token = nova; localStorage.setItem(LS_TOK, nova);
-      msg.textContent = "✓ Senha alterada. Notificação enviada."; msg.classList.add("ok");
-      setTimeout(() => { fecharTrocar(); toast("Senha alterada."); }, 1400);
+      await apiPost("trocar-senha", { senhaAtual: atual, novaSenha: nova });
+      msg.textContent = "✓ Senha alterada. Outras sessões foram revogadas."; msg.classList.add("ok");
+      setTimeout(() => { fecharTrocar(); toast("Senha alterada."); }, 1600);
     } catch (err) { msg.textContent = "Erro: " + err.message; msg.classList.add("err"); }
+  }
+
+  // ====== SESSÕES ATIVAS ======
+  async function carregarSessoes() {
+    const wrap = $("#sessoes-lista");
+    wrap.innerHTML = `<div class="anexo-status">Carregando sessões…</div>`;
+    try {
+      const r = await apiPost("sessoes-listar");
+      const lista = r.sessoes || [];
+      $("#sessoes-meta").textContent = lista.length + " sessão" + (lista.length === 1 ? "" : "ões");
+      if (lista.length === 0) {
+        wrap.innerHTML = `<div class="anexos-vazio">Nenhuma sessão ativa.</div>`;
+        return;
+      }
+      wrap.innerHTML = lista.map(s => {
+        const criada = new Date(s.criada).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+        const ultimo = new Date(s.ultimoUso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+        return `
+          <div class="sessao-item ${s.atual ? 'sessao-atual' : ''}">
+            <div class="sessao-info">
+              <div class="sessao-disp">${escapeHtml(s.dispositivo)} ${s.atual ? '<span class="sessao-tag">esta sessão</span>' : ''}</div>
+              <div class="sessao-meta">Criada: ${criada} · Último uso: ${ultimo}</div>
+            </div>
+            ${s.atual ? '' : `<button class="sessao-revogar" data-id="${escapeHtml(s.idHashCompleto)}" title="Revogar">×</button>`}
+          </div>`;
+      }).join("");
+      $$(".sessao-revogar").forEach(b => b.addEventListener("click", async () => {
+        if (!confirm("Revogar essa sessão? O dispositivo será deslogado.")) return;
+        try {
+          await apiPost("sessao-revogar", { idHashCompleto: b.dataset.id });
+          toast("Sessão revogada.");
+          carregarSessoes();
+        } catch (err) { toast(err.message, true); }
+      }));
+    } catch (err) {
+      wrap.innerHTML = `<div class="anexo-status">Erro: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function revogarOutras() {
+    if (!confirm("Revogar todas as outras sessões? Você continua logado neste dispositivo.")) return;
+    try {
+      const r = await apiPost("sessao-revogar-outras");
+      toast(`${r.removidas} sessão(ões) revogada(s).`);
+      carregarSessoes();
+    } catch (err) { toast(err.message, true); }
   }
 
   // ====== EXPORT ======
@@ -735,8 +865,14 @@
     $("#chat-send").addEventListener("click", chatEnviar);
     $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter") chatEnviar(); });
 
-    // Login
-    $("#login-form").addEventListener("submit", fazerLogin);
+    // Login 2FA
+    $("#login-step1").addEventListener("submit", loginStep1);
+    $("#login-step2").addEventListener("submit", loginStep2);
+    $("#login-reenviar").addEventListener("click", reenviarCodigo);
+    $("#login-voltar").addEventListener("click", () => setLoginStep(1));
+
+    // Sessões
+    $("#btn-revogar-outras").addEventListener("click", revogarOutras);
 
     // Tab inicial via hash
     window.addEventListener("hashchange", () => {
