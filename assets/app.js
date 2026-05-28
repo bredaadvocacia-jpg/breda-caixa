@@ -1,384 +1,503 @@
-/* Caixa Breda Advocacia v2 — App unificado (entradas/saidas)
-   Cada HTML define antes:
-     window.CAIXA_CONFIG = { aba: "entradas" | "saidas", titulo: "...", subtitulo: "..." }
-*/
+/* Caixa Breda Advocacia v4 — SPA unificada com 3 abas e IA Gemini */
 (function () {
   "use strict";
 
-  const CFG = window.CAIXA_CONFIG || { aba: "entradas" };
-  const LS_KEY_URL = "caixaBredaApiUrl";
-  const LS_KEY_TOKEN = "caixaBredaToken";
-  const LS_KEY_CACHE = `caixaBredaCache_${CFG.aba}`;
+  const LS_URL = "caixaBredaApiUrl";
+  const LS_TOK = "caixaBredaToken";
+  const LS_CACHE = "caixaBredaCache";
 
-  const MESES_PT = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-  ];
+  const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
   const state = {
-    dados: [],
+    apiUrl: localStorage.getItem(LS_URL) || "",
+    token: localStorage.getItem(LS_TOK) || "",
+    entradas: [],
+    saidas: [],
+    abaAtiva: location.hash.replace("#", "") || "insights",
     filtroAno: null,
     filtroMes: null,
     filtroCategoria: null,
     filtroBusca: "",
-    apiUrl: localStorage.getItem(LS_KEY_URL) || "",
-    token: localStorage.getItem(LS_KEY_TOKEN) || "",
-    chartEvolucao: null,
-    chartCategorias: null,
-    anexosPendentes: [], // arquivos selecionados no modal antes de salvar
+    filtroTipos: { entrada: true, saida: true },
+    anoAnalise: new Date().getFullYear(),
+    anexosPendentes: [],
+    charts: {},
+    chatHistorico: [],
   };
 
-  // ----------------- HELPERS -----------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-  const fmtBRL = (n) =>
-    "R$ " + (n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  const fmtData = (iso) => {
-    if (!iso) return "—";
-    const [y, m, d] = iso.split("-");
-    return `${d}/${m}/${y}`;
+  // ====== HELPERS ======
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const fmtBRL = (n) => "R$ " + (n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBRLk = (n) => {
+    const a = Math.abs(n || 0);
+    if (a >= 1e6) return "R$ " + (n / 1e6).toFixed(2).replace(".", ",") + "M";
+    if (a >= 1e3) return "R$ " + (n / 1e3).toFixed(1).replace(".", ",") + "k";
+    return "R$ " + (n || 0).toFixed(0);
   };
+  const fmtData = (iso) => iso ? iso.split("-").reverse().join("/") : "—";
+  const fmtBytes = (n) => n < 1024 ? n + "B" : n < 1024*1024 ? (n/1024).toFixed(1)+"KB" : (n/1024/1024).toFixed(1)+"MB";
+  const escapeHtml = (s) => s == null ? "" : String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
-  const fmtBytes = (n) => {
-    if (!n) return "";
-    if (n < 1024) return n + "B";
-    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + "KB";
-    return (n / 1024 / 1024).toFixed(1) + "MB";
-  };
-
-  const toast = (msg, isError = false) => {
-    const el = $("#toast");
-    el.textContent = msg;
-    el.classList.toggle("err", isError);
-    el.classList.add("show");
-    clearTimeout(toast._t);
+  const toast = (msg, err) => {
+    const el = $("#toast"); el.textContent = msg; el.classList.toggle("err", !!err);
+    el.classList.add("show"); clearTimeout(toast._t);
     toast._t = setTimeout(() => el.classList.remove("show"), 2800);
   };
 
-  const escapeHtml = (s) => {
-    if (s == null) return "";
-    return String(s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  };
-
-  // ----------------- API -----------------
+  // ====== API ======
   async function apiGet(params = {}) {
-    if (!state.apiUrl) throw new Error("Configure a URL da API.");
-    if (!state.token) throw new Error("Faça login com sua senha.");
+    if (!state.apiUrl || !state.token) throw new Error("Faça login.");
     const url = new URL(state.apiUrl);
     url.searchParams.set("token", state.token);
-    url.searchParams.set("aba", CFG.aba);
     Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
     const r = await fetch(url.toString(), { method: "GET", redirect: "follow" });
     const data = await r.json();
     if (!data.ok) throw new Error(data.erro || "Erro na API");
     return data;
   }
-
-  async function apiPost(acao, payload = {}) {
-    if (!state.apiUrl) throw new Error("Configure a URL da API.");
-    if (!state.token) throw new Error("Faça login com sua senha.");
-    const body = Object.assign({ aba: CFG.aba, acao, token: state.token }, payload);
+  async function apiPost(acao, body = {}) {
+    if (!state.apiUrl || !state.token) throw new Error("Faça login.");
     const r = await fetch(state.apiUrl, {
       method: "POST",
       redirect: "follow",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(Object.assign({ acao, token: state.token }, body)),
     });
     const data = await r.json();
     if (!data.ok) throw new Error(data.erro || "Erro na API");
     return data;
   }
 
-  async function apiUpload(arquivo) {
-    return apiPost("upload", { arquivo });
-  }
-
-  // ----------------- LOGIN -----------------
+  // ====== LOGIN ======
   function abrirLogin(msg) {
-    if (msg) $("#login-msg").textContent = msg;
+    if (msg) {
+      const el = $("#login-msg");
+      el.textContent = msg;
+      el.classList.toggle("err", msg.startsWith("❌") || msg.toLowerCase().includes("inválid"));
+    }
     $("#login-url").value = state.apiUrl;
     $("#login-senha").value = "";
     $("#login-overlay").classList.add("open");
     document.body.style.overflow = "hidden";
   }
-  function fecharLogin() {
-    $("#login-overlay").classList.remove("open");
-    document.body.style.overflow = "";
-  }
+  function fecharLogin() { $("#login-overlay").classList.remove("open"); document.body.style.overflow = ""; }
+
   async function fazerLogin(ev) {
     ev.preventDefault();
     const url = $("#login-url").value.trim();
     const senha = $("#login-senha").value.trim();
-    if (!url || !senha) {
-      $("#login-msg").textContent = "Preencha URL e senha.";
-      return;
-    }
-    // Testar com um GET rápido
+    if (!url || !senha) { abrirLogin("Preencha URL e senha."); return; }
     state.apiUrl = url;
     state.token = senha;
     try {
-      await apiGet();
-      localStorage.setItem(LS_KEY_URL, url);
-      localStorage.setItem(LS_KEY_TOKEN, senha);
+      await apiGet({ aba: "info" });
+      localStorage.setItem(LS_URL, url);
+      localStorage.setItem(LS_TOK, senha);
       fecharLogin();
-      carregar();
+      carregarTudo();
     } catch (err) {
       state.token = "";
-      $("#login-msg").textContent = "❌ " + err.message;
+      abrirLogin("❌ " + err.message);
     }
   }
   function logout() {
-    localStorage.removeItem(LS_KEY_TOKEN);
+    localStorage.removeItem(LS_TOK);
     state.token = "";
-    state.dados = [];
-    abrirLogin("Sessão encerrada. Entre novamente.");
+    state.entradas = []; state.saidas = [];
+    abrirLogin("Sessão encerrada.");
   }
 
-  // ----------------- CARREGAMENTO -----------------
-  async function carregar() {
-    const loader = $("#loader");
-    const tabela = $("#tabela-card");
-    loader.style.display = "flex";
-    tabela.style.display = "none";
-
+  // ====== CARREGAR DADOS ======
+  async function carregarTudo() {
     try {
-      const res = await apiGet();
-      state.dados = res.dados || [];
-      localStorage.setItem(LS_KEY_CACHE, JSON.stringify({ ts: Date.now(), dados: state.dados }));
+      const r = await apiGet({ aba: "painel" });
+      state.entradas = r.entradas || [];
+      state.saidas = r.saidas || [];
+      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
     } catch (err) {
-      if (err.message.includes("Senha inválida") || err.message.includes("login") || err.message.includes("token")) {
-        abrirLogin(err.message);
-        loader.style.display = "none";
-        return;
-      }
-      const cache = localStorage.getItem(LS_KEY_CACHE);
-      if (cache) {
-        state.dados = JSON.parse(cache).dados || [];
-        toast("API indisponível — exibindo cache offline.", true);
+      if (/senha|inválid|token|login/i.test(err.message)) { abrirLogin(err.message); return; }
+      const c = localStorage.getItem(LS_CACHE);
+      if (c) {
+        const d = JSON.parse(c);
+        state.entradas = d.e || []; state.saidas = d.s || [];
+        toast("API indisponível — usando cache.", true);
       } else {
         toast(err.message, true);
-        state.dados = [];
       }
-    } finally {
-      loader.style.display = "none";
-      tabela.style.display = "block";
-      popularFiltros();
-      render();
+    }
+    popularFiltros();
+    renderTodasAbas();
+    carregarIA();
+  }
+
+  async function carregarIA() {
+    // Resumo
+    apiGet({ aba: "ia", acao: "resumo" }).then(r => {
+      $("#resumo-ia").textContent = r.texto || "(sem resposta)";
+    }).catch(err => {
+      $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}. Configure a chave Gemini pelo editor Apps Script (rode <code>setarChaveGemini</code>).</span>`;
+    });
+
+    // Alertas
+    apiGet({ aba: "ia", acao: "alertas" }).then(r => {
+      const wrap = $("#alertas");
+      const meta = $("#alertas-meta");
+      const list = r.alertas || [];
+      if (list.length === 0) {
+        wrap.innerHTML = `<div class="alert empty"><span class="alert-icon">✓</span><span>Nenhuma anomalia relevante detectada nos últimos meses.</span></div>`;
+        meta.textContent = "0 alertas";
+      } else {
+        wrap.innerHTML = list.map(a => `<div class="alert"><span class="alert-icon">!</span><span>${escapeHtml(a)}</span></div>`).join("");
+        meta.textContent = list.length + " alerta" + (list.length === 1 ? "" : "s");
+      }
+    }).catch(err => {
+      $("#alertas").innerHTML = `<div class="alert"><span class="alert-icon">!</span><span>IA indisponível: ${escapeHtml(err.message)}</span></div>`;
+      $("#alertas-meta").textContent = "—";
+    });
+
+    // Previsão (só dispara quando entrar na tab Análise)
+  }
+
+  async function carregarPrevisao() {
+    const wrap = $("#forecast-grid");
+    wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">Gerando previsão…</div></div>`;
+    try {
+      const r = await apiGet({ aba: "ia", acao: "previsao" });
+      const meses = (r.previsao && r.previsao.meses) || [];
+      if (!meses.length) {
+        wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">—</div><div class="forecast-notas">${escapeHtml(r.previsao && r.previsao.erro || "Sem dados suficientes")}</div></div>`;
+        return;
+      }
+      wrap.innerHTML = meses.map(m => {
+        const [yy, mm] = (m.mes || "—").split("-");
+        const label = mm ? `${MESES_PT[parseInt(mm,10)-1]} ${yy}` : (m.mes || "—");
+        const saldo = (m.receita || 0) - (m.despesa || 0);
+        return `
+          <div class="forecast-month">
+            <div class="forecast-mes">${escapeHtml(label)}</div>
+            <div class="forecast-row"><span class="lbl">Receita</span><span class="val pos">${fmtBRL(m.receita || 0)}</span></div>
+            <div class="forecast-row"><span class="lbl">Despesa</span><span class="val neg">${fmtBRL(m.despesa || 0)}</span></div>
+            <div class="forecast-row"><span class="lbl">Saldo</span><span class="val ${saldo >= 0 ? 'pos' : 'neg'}">${fmtBRL(saldo)}</span></div>
+            ${m.notas ? `<div class="forecast-notas">${escapeHtml(m.notas)}</div>` : ""}
+          </div>`;
+      }).join("");
+    } catch (err) {
+      wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">IA indisponível</div><div class="forecast-notas">${escapeHtml(err.message)}</div></div>`;
     }
   }
 
-  // ----------------- FILTROS -----------------
-  function aplicarFiltros() {
-    let r = state.dados.slice();
-    if (state.filtroAno) r = r.filter((x) => x.ano == state.filtroAno);
-    if (state.filtroMes) r = r.filter((x) => x.mes == state.filtroMes);
-    if (state.filtroCategoria) r = r.filter((x) => x.categoria === state.filtroCategoria);
-    if (state.filtroBusca) {
-      const q = state.filtroBusca.toLowerCase();
-      r = r.filter((x) => (x.descricao || "").toLowerCase().includes(q));
+  // ====== TABS ======
+  function ativarTab(name) {
+    state.abaAtiva = name;
+    location.hash = name;
+    $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+    $$("[data-tab-content]").forEach(el => el.hidden = el.dataset.tabContent !== name);
+    if (name === "analise") {
+      popularSelectAno();
+      renderAnalise();
+      if (!state._previsaoLoaded) { carregarPrevisao(); state._previsaoLoaded = true; }
     }
-    return r;
   }
 
-  function popularFiltros() {
-    const anos = Array.from(new Set(state.dados.map((x) => x.ano).filter(Boolean))).sort((a, b) => b - a);
-    const selAno = $("#filtro-ano");
-    selAno.innerHTML = '<option value="">Todos os anos</option>' +
-      anos.map((a) => `<option value="${a}">${a}</option>`).join("");
-    const selMes = $("#filtro-mes");
-    selMes.innerHTML = '<option value="">Todos os meses</option>' +
-      MESES_PT.map((nome, i) => `<option value="${i + 1}">${nome}</option>`).join("");
-    if (state.filtroAno) selAno.value = state.filtroAno;
-    if (state.filtroMes) selMes.value = state.filtroMes;
+  // ====== RENDER ======
+  function renderTodasAbas() {
+    renderInsights();
+    renderMovimentacoes();
+    if (state.abaAtiva === "analise") renderAnalise();
   }
 
-  // ----------------- RENDER -----------------
-  function render() {
-    const filtrados = aplicarFiltros();
-    renderKPIs(filtrados);
-    renderChips();
-    renderTabela(filtrados);
-    renderGraficos(filtrados);
-  }
-
-  function renderKPIs(filtrados) {
-    const totalPeriodo = filtrados.reduce((s, x) => s + (x.valor || 0), 0);
-    $("#kpi-total").textContent = fmtBRL(totalPeriodo);
-    $("#kpi-qtd").textContent = filtrados.length.toLocaleString("pt-BR");
-
+  function renderInsights() {
     const now = new Date();
     const yAtual = now.getFullYear();
     const mAtual = now.getMonth() + 1;
     const mAnt = mAtual === 1 ? 12 : mAtual - 1;
     const yAnt = mAtual === 1 ? yAtual - 1 : yAtual;
 
-    const totMesAtual = state.dados
-      .filter((x) => x.ano === yAtual && x.mes === mAtual)
-      .reduce((s, x) => s + (x.valor || 0), 0);
-    const totMesAnt = state.dados
-      .filter((x) => x.ano === yAnt && x.mes === mAnt)
+    const sumMes = (arr, y, m) => arr.filter(x => x.ano === y && x.mes === m && x.categoria !== "Saldo Mês Anterior")
       .reduce((s, x) => s + (x.valor || 0), 0);
 
-    $("#kpi-mes").textContent = fmtBRL(totMesAtual);
-    const sub = $("#kpi-mes-sub");
-    if (totMesAnt > 0) {
-      const diff = ((totMesAtual - totMesAnt) / totMesAnt) * 100;
-      const sign = diff >= 0 ? "↑" : "↓";
-      sub.textContent = `${sign} ${Math.abs(diff).toFixed(1)}% vs ${MESES_PT[mAnt - 1]}`;
-      sub.className = "kpi-sub " + (diff >= 0 ? "pos" : "neg");
-    } else {
-      sub.textContent = "sem comparativo";
-      sub.className = "kpi-sub";
-    }
+    const recMes = sumMes(state.entradas, yAtual, mAtual);
+    const desMes = sumMes(state.saidas, yAtual, mAtual);
+    const recAnt = sumMes(state.entradas, yAnt, mAnt);
+    const desAnt = sumMes(state.saidas, yAnt, mAnt);
+    const saldoMes = recMes - desMes;
+    const margem = recMes > 0 ? (saldoMes / recMes) * 100 : 0;
 
-    const totAno = state.dados
-      .filter((x) => x.ano === yAtual)
-      .reduce((s, x) => s + (x.valor || 0), 0);
-    $("#kpi-ano").textContent = fmtBRL(totAno);
+    $("#periodo-atual").textContent = `${MESES_PT[mAtual-1]} ${yAtual}`;
+    $("#stat-receita-mes").textContent = fmtBRL(recMes);
+    $("#stat-despesa-mes").textContent = fmtBRL(desMes);
+    $("#stat-saldo-mes").textContent = fmtBRL(saldoMes);
+    $("#stat-saldo-mes").className = "stat-value " + (saldoMes >= 0 ? "pos" : "neg");
+    $("#stat-margem").textContent = margem.toFixed(1) + "%";
+    $("#stat-margem").className = "stat-value " + (margem >= 0 ? "pos" : "neg");
+
+    $("#stat-receita-sub").innerHTML = comparativo(recMes, recAnt, mAnt);
+    $("#stat-despesa-sub").innerHTML = comparativo(desMes, desAnt, mAnt, true);
+    $("#stat-saldo-sub").innerHTML = comparativo(saldoMes, recAnt - desAnt, mAnt);
   }
 
-  function renderChips() {
-    const cats = Array.from(new Set(state.dados.map((x) => x.categoria))).sort();
-    const wrap = $("#chips");
-    wrap.innerHTML = cats.map(
-      (c) => `<button class="chip ${state.filtroCategoria === c ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`
-    ).join("");
-    $$(".chip", wrap).forEach((btn) => {
+  function comparativo(v, ant, mAnt, invertColor) {
+    if (!ant) return `<span>—</span>`;
+    const diff = ((v - ant) / Math.abs(ant)) * 100;
+    let cls = diff >= 0 ? "pos" : "neg";
+    if (invertColor) cls = diff >= 0 ? "neg" : "pos"; // crescer despesa = ruim
+    const arrow = diff >= 0 ? "↑" : "↓";
+    return `<span class="${cls}">${arrow} ${Math.abs(diff).toFixed(1)}% vs ${MESES_PT[mAnt-1].slice(0,3)}</span>`;
+  }
+
+  // ====== MOVIMENTAÇÕES ======
+  function popularFiltros() {
+    const todos = state.entradas.concat(state.saidas);
+    const anos = Array.from(new Set(todos.map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
+    const selAno = $("#filtro-ano");
+    selAno.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a => `<option value="${a}">${a}</option>`).join("");
+    const selMes = $("#filtro-mes");
+    selMes.innerHTML = '<option value="">Todos os meses</option>' + MESES_PT.map((n,i) => `<option value="${i+1}">${n}</option>`).join("");
+    if (state.filtroAno) selAno.value = state.filtroAno;
+    if (state.filtroMes) selMes.value = state.filtroMes;
+  }
+
+  function dadosFiltrados() {
+    let arr = [];
+    if (state.filtroTipos.entrada) arr = arr.concat(state.entradas.map(x => Object.assign({_t: "entrada"}, x)));
+    if (state.filtroTipos.saida) arr = arr.concat(state.saidas.map(x => Object.assign({_t: "saida"}, x)));
+    if (state.filtroAno) arr = arr.filter(x => x.ano == state.filtroAno);
+    if (state.filtroMes) arr = arr.filter(x => x.mes == state.filtroMes);
+    if (state.filtroCategoria) arr = arr.filter(x => x.categoria === state.filtroCategoria);
+    if (state.filtroBusca) {
+      const q = state.filtroBusca.toLowerCase();
+      arr = arr.filter(x => (x.descricao || "").toLowerCase().includes(q));
+    }
+    return arr;
+  }
+
+  function renderMovimentacoes() {
+    // Chips: tipos (já estão no HTML, só atualizar visual)
+    $$(".chip[data-tipo]").forEach(btn => {
+      btn.classList.toggle("active", !!state.filtroTipos[btn.dataset.tipo]);
+    });
+
+    // Chips de categoria
+    const filtrados = dadosFiltrados();
+    const cats = Array.from(new Set([...state.entradas, ...state.saidas].map(x => x.categoria))).sort();
+    const wrap = $("#chips-categorias");
+    wrap.innerHTML = cats.map(c => `<button class="chip ${state.filtroCategoria === c ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("");
+    $$(".chip[data-cat]").forEach(btn => {
       btn.addEventListener("click", () => {
         state.filtroCategoria = state.filtroCategoria === btn.dataset.cat ? null : btn.dataset.cat;
-        render();
+        renderMovimentacoes();
       });
     });
-  }
 
-  function renderTabela(filtrados) {
-    const ordenados = filtrados.slice().sort((a, b) => {
-      const da = a.data || "0";
-      const db = b.data || "0";
-      return db.localeCompare(da);
-    });
+    // Tabela
+    const ordenados = filtrados.slice().sort((a,b) => (b.data || "0").localeCompare(a.data || "0"));
     const tbody = $("#tabela-body");
     if (ordenados.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4">
-        <div class="empty-state">
-          <h3>Sem lançamentos</h3>
-          <p>Ajuste os filtros ou adicione um novo lançamento clicando em "+ NOVO".</p>
-        </div>
-      </td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><h3>Sem lançamentos</h3><p>Ajuste os filtros ou crie um novo.</p></div></td></tr>`;
     } else {
-      tbody.innerHTML = ordenados.map((x) => {
-        const temAnexos = Array.isArray(x.anexos) && x.anexos.length > 0;
-        const clipIcon = temAnexos
-          ? `<span class="clip-icon" title="${x.anexos.length} anexo(s)">📎 ${x.anexos.length}</span>`
-          : "";
+      tbody.innerHTML = ordenados.slice(0, 500).map(x => {
+        const tem = Array.isArray(x.anexos) && x.anexos.length;
+        const clip = tem ? `<span class="clip-icon">📎 ${x.anexos.length}</span>` : "";
+        const isEntrada = x._t === "entrada";
         return `
-        <tr data-id="${escapeHtml(x.id)}">
-          <td class="col-data">${fmtData(x.data)}</td>
-          <td class="col-desc">${escapeHtml(x.descricao)} ${clipIcon}</td>
-          <td class="col-cat"><span class="pill">${escapeHtml(x.categoria || "—")}</span></td>
-          <td class="col-valor">${fmtBRL(x.valor)}</td>
-        </tr>`;
+          <tr data-id="${escapeHtml(x.id)}" data-tipo="${x._t}">
+            <td class="col-data">${fmtData(x.data)}</td>
+            <td><span class="pill ${isEntrada ? 'pill-entrada' : 'pill-saida'}">${isEntrada ? "↑" : "↓"}</span></td>
+            <td class="col-desc">${escapeHtml(x.descricao)} ${clip}</td>
+            <td><span class="pill">${escapeHtml(x.categoria || "—")}</span></td>
+            <td class="col-valor ${isEntrada ? 'pos' : 'neg'}">${isEntrada ? "+" : "−"} ${fmtBRL(x.valor)}</td>
+          </tr>`;
       }).join("");
-      $$("#tabela-body tr").forEach((tr) => {
-        tr.addEventListener("click", () => abrirModalEdicao(tr.dataset.id));
+      $$("#tabela-body tr").forEach(tr => {
+        tr.addEventListener("click", () => abrirModalEdicao(tr.dataset.id, tr.dataset.tipo));
       });
     }
-    $("#tabela-meta").textContent = `${ordenados.length} lançamento${ordenados.length === 1 ? "" : "s"} · ${fmtBRL(
-      ordenados.reduce((s, x) => s + (x.valor || 0), 0)
-    )}`;
+
+    const totRec = ordenados.filter(x => x._t === "entrada").reduce((s,x) => s + (x.valor || 0), 0);
+    const totDes = ordenados.filter(x => x._t === "saida").reduce((s,x) => s + (x.valor || 0), 0);
+    $("#tabela-meta").innerHTML = `${ordenados.length} lançamento${ordenados.length===1?"":"s"} · <span class="pos">${fmtBRL(totRec)}</span> em entradas · <span class="neg">${fmtBRL(totDes)}</span> em saídas${ordenados.length > 500 ? " · exibindo 500 mais recentes" : ""}`;
   }
 
-  // ----------------- GRÁFICOS -----------------
-  function renderGraficos(filtrados) {
-    if (typeof Chart === "undefined") return;
-    const base = filtrados.length > 0 ? filtrados : state.dados;
+  // ====== ANÁLISE ======
+  function popularSelectAno() {
+    const anos = Array.from(new Set([...state.entradas, ...state.saidas].map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
+    const sel = $("#ano-analise");
+    sel.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join("");
+    if (!anos.includes(state.anoAnalise)) state.anoAnalise = anos[0];
+    sel.value = state.anoAnalise;
+  }
 
-    const buckets = {};
-    base.forEach((x) => {
-      if (!x.ano || !x.mes) return;
-      const k = `${x.ano}-${String(x.mes).padStart(2, "0")}`;
-      buckets[k] = (buckets[k] || 0) + (x.valor || 0);
-    });
-    const keys = Object.keys(buckets).sort().slice(-12);
-    const labels = keys.map((k) => {
-      const [y, m] = k.split("-");
-      return `${MESES_PT[parseInt(m, 10) - 1].slice(0, 3)}/${y.slice(2)}`;
-    });
-    const values = keys.map((k) => buckets[k]);
+  function renderAnalise() {
+    const ano = state.anoAnalise;
+    const e = state.entradas.filter(x => x.ano === ano && x.categoria !== "Saldo Mês Anterior");
+    const s = state.saidas.filter(x => x.ano === ano);
 
-    const ctx1 = $("#chart-evolucao").getContext("2d");
-    if (state.chartEvolucao) state.chartEvolucao.destroy();
-    state.chartEvolucao = new Chart(ctx1, {
+    const rec = new Array(12).fill(0);
+    const des = new Array(12).fill(0);
+    e.forEach(x => x.mes >= 1 && x.mes <= 12 && (rec[x.mes-1] += x.valor || 0));
+    s.forEach(x => x.mes >= 1 && x.mes <= 12 && (des[x.mes-1] += x.valor || 0));
+
+    renderRxD(rec, des);
+    renderSaldoChart(rec, des);
+    renderTopCharts(e, s);
+    renderTabelaMensal(rec, des);
+  }
+
+  const destroy = (k) => { if (state.charts[k]) { state.charts[k].destroy(); state.charts[k] = null; } };
+
+  function renderRxD(rec, des) {
+    destroy("rxd");
+    state.charts.rxd = new Chart($("#chart-rxd").getContext("2d"), {
       type: "bar",
-      data: { labels, datasets: [{
-        data: values,
-        backgroundColor: "rgba(30, 58, 95, 0.85)",
-        borderColor: "#c9a961",
-        borderWidth: 1,
-        borderRadius: 4,
-      }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: {
-            ticks: { callback: (v) => "R$ " + (v / 1000).toFixed(0) + "k", font: { size: 10 }, color: "#5a6573" },
-            grid: { color: "#f0eee9" },
-          },
-          x: { ticks: { font: { size: 10 }, color: "#5a6573" }, grid: { display: false } },
-        },
+      data: {
+        labels: MESES_PT.map(m => m.slice(0,3)),
+        datasets: [
+          { label: "Receitas", data: rec, backgroundColor: "rgba(61,107,90,0.85)", borderColor: "#3d6b5a", borderWidth: 1, borderRadius: 3 },
+          { label: "Despesas", data: des, backgroundColor: "rgba(152,69,72,0.85)", borderColor: "#984548", borderWidth: 1, borderRadius: 3 },
+        ],
       },
-    });
-
-    const catBuckets = {};
-    base.forEach((x) => {
-      catBuckets[x.categoria || "—"] = (catBuckets[x.categoria || "—"] || 0) + (x.valor || 0);
-    });
-    const catLabels = Object.keys(catBuckets);
-    const catValues = catLabels.map((c) => catBuckets[c]);
-    const palette = ["#0a2540", "#c9a961", "#2d4e75", "#b89548", "#1e3a5f", "#8b3a3a", "#2e7d4f", "#8a929c", "#5a6573", "#b8860b"];
-
-    const ctx2 = $("#chart-categorias").getContext("2d");
-    if (state.chartCategorias) state.chartCategorias.destroy();
-    state.chartCategorias = new Chart(ctx2, {
-      type: "doughnut",
-      data: { labels: catLabels, datasets: [{
-        data: catValues,
-        backgroundColor: catLabels.map((_, i) => palette[i % palette.length]),
-        borderWidth: 0,
-      }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "62%",
-        plugins: { legend: { position: "right", labels: { font: { size: 10 }, color: "#5a6573", boxWidth: 10 } } },
-      },
+      options: chartOpts(),
     });
   }
 
-  // ----------------- MODAL LANÇAMENTO -----------------
+  function renderSaldoChart(rec, des) {
+    const acum = []; let sum = 0;
+    for (let i = 0; i < 12; i++) { sum += rec[i] - des[i]; acum.push(sum); }
+    destroy("saldo");
+    state.charts.saldo = new Chart($("#chart-saldo").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: MESES_PT.map(m => m.slice(0,3)),
+        datasets: [{
+          data: acum,
+          borderColor: "#3d6b5a",
+          backgroundColor: "rgba(61,107,90,0.10)",
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointBackgroundColor: "#3d6b5a",
+          pointRadius: 3,
+        }],
+      },
+      options: chartOpts({ legend: false }),
+    });
+  }
+
+  function renderTopCharts(e, s) {
+    const top = (arr, n=10) => {
+      const b = {}; arr.forEach(x => { b[x.categoria] = (b[x.categoria] || 0) + (x.valor || 0); });
+      return Object.entries(b).sort((a,b) => b[1]-a[1]).slice(0,n);
+    };
+    const topS = top(s, 10); const topE = top(e, 10);
+    destroy("topS"); destroy("topE");
+    state.charts.topS = new Chart($("#chart-top-saidas").getContext("2d"), {
+      type: "bar",
+      data: { labels: topS.map(x=>x[0]), datasets: [{ data: topS.map(x=>x[1]), backgroundColor: "rgba(152,69,72,0.8)", borderColor: "#984548", borderWidth: 1, borderRadius: 3 }] },
+      options: chartOpts({ horizontal: true, legend: false }),
+    });
+    state.charts.topE = new Chart($("#chart-top-entradas").getContext("2d"), {
+      type: "bar",
+      data: { labels: topE.map(x=>x[0]), datasets: [{ data: topE.map(x=>x[1]), backgroundColor: "rgba(61,107,90,0.8)", borderColor: "#3d6b5a", borderWidth: 1, borderRadius: 3 }] },
+      options: chartOpts({ horizontal: true, legend: false }),
+    });
+  }
+
+  function chartOpts(opts = {}) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: opts.horizontal ? "y" : "x",
+      plugins: {
+        legend: opts.legend === false ? { display: false } : { position: "top", labels: { font: { size: 11, family: 'Inter' }, color: "#6b7076", boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: { label: (c) => (c.dataset.label ? c.dataset.label + ": " : "") + fmtBRL(opts.horizontal ? c.parsed.x : c.parsed.y) } },
+      },
+      scales: opts.horizontal ? {
+        x: { ticks: { callback: v => fmtBRLk(v), font: { size: 10, family: 'Inter' }, color: "#9aa0a6" }, grid: { color: "#f3f3f1" } },
+        y: { ticks: { font: { size: 11, family: 'Inter' }, color: "#6b7076" }, grid: { display: false } },
+      } : {
+        y: { ticks: { callback: v => fmtBRLk(v), font: { size: 10, family: 'Inter' }, color: "#9aa0a6" }, grid: { color: "#f3f3f1" } },
+        x: { ticks: { font: { size: 11, family: 'Inter' }, color: "#6b7076" }, grid: { display: false } },
+      },
+    };
+  }
+
+  function renderTabelaMensal(rec, des) {
+    const tbody = $("#tabela-mensal");
+    let totR = 0, totD = 0;
+    tbody.innerHTML = rec.map((r, i) => {
+      const d = des[i]; const sal = r - d; const mar = r > 0 ? (sal/r*100) : 0;
+      totR += r; totD += d;
+      return `<tr>
+        <td>${MESES_PT[i]}</td>
+        <td class="col-valor pos">${fmtBRL(r)}</td>
+        <td class="col-valor neg">${fmtBRL(d)}</td>
+        <td class="col-valor ${sal>=0?'pos':'neg'}">${fmtBRL(sal)}</td>
+        <td class="col-valor ${mar>=0?'pos':'neg'}">${mar.toFixed(1)}%</td>
+      </tr>`;
+    }).join("");
+    const totS = totR - totD; const totM = totR > 0 ? (totS/totR*100) : 0;
+    $("#tot-rec").textContent = fmtBRL(totR); $("#tot-rec").classList.add("pos");
+    $("#tot-des").textContent = fmtBRL(totD); $("#tot-des").classList.add("neg");
+    $("#tot-sal").textContent = fmtBRL(totS); $("#tot-sal").className = "col-valor " + (totS>=0?'pos':'neg');
+    $("#tot-mar").textContent = totM.toFixed(1) + "%"; $("#tot-mar").className = "col-valor " + (totM>=0?'pos':'neg');
+  }
+
+  // ====== CHAT ======
+  async function chatEnviar() {
+    const input = $("#chat-input");
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = "";
+    $("#chat-send").disabled = true;
+    addChatMsg("user", q);
+    addChatMsg("ai", "Pensando…", true);
+    try {
+      const r = await apiPost("ia-chat", { pergunta: q });
+      removeLoadingMsg();
+      addChatMsg("ai", r.resposta || "(sem resposta)");
+    } catch (err) {
+      removeLoadingMsg();
+      addChatMsg("ai", "❌ " + err.message);
+    } finally {
+      $("#chat-send").disabled = false;
+      input.focus();
+    }
+  }
+  function addChatMsg(role, content, isLoading) {
+    const wrap = $("#chat-log");
+    const div = document.createElement("div");
+    div.className = "chat-msg" + (isLoading ? " loading-msg" : "");
+    div.innerHTML = `<div class="chat-role ${role}">${role === "user" ? "você" : "IA"}</div><div class="chat-content">${escapeHtml(content)}</div>`;
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+  function removeLoadingMsg() {
+    const last = $("#chat-log .loading-msg");
+    if (last) last.remove();
+  }
+
+  // ====== MODAL LANÇAMENTO ======
   function abrirModalNovo() {
     $("#modal-titulo").textContent = "Novo lançamento";
     $("#modal-form").reset();
     $("#modal-id").value = "";
-    $("#modal-data").value = new Date().toISOString().slice(0, 10);
-    popularSelectCategorias();
+    $("#modal-data").value = new Date().toISOString().slice(0,10);
+    $("#modal-tipo").value = "saida";
+    popularSelectCategorias("saida");
     state.anexosPendentes = [];
     renderAnexos([]);
     $("#btn-deletar").style.display = "none";
     $("#modal").classList.add("open");
   }
 
-  function abrirModalEdicao(id) {
-    const x = state.dados.find((d) => d.id === id);
+  function abrirModalEdicao(id, tipo) {
+    const arr = tipo === "entrada" ? state.entradas : state.saidas;
+    const x = arr.find(d => d.id === id);
     if (!x) return;
     $("#modal-titulo").textContent = "Editar lançamento";
-    popularSelectCategorias();
+    $("#modal-tipo").value = tipo;
+    popularSelectCategorias(tipo);
     $("#modal-id").value = x.id;
     $("#modal-data").value = x.data || "";
     $("#modal-desc").value = x.descricao || "";
@@ -390,81 +509,84 @@
     $("#modal").classList.add("open");
   }
 
-  function popularSelectCategorias() {
-    const cats = Array.from(new Set(state.dados.map((x) => x.categoria))).sort();
-    const padroes = CFG.aba === "entradas"
+  function popularSelectCategorias(tipo) {
+    const arr = tipo === "entrada" ? state.entradas : state.saidas;
+    const cats = Array.from(new Set(arr.map(x => x.categoria))).sort();
+    const padroes = tipo === "entrada"
       ? ["Honorários", "Sucumbência", "Reembolsos", "Rendas / Aplicações", "Outros Recebimentos"]
       : ["Despesas Fixas", "Folha (Salários)", "Impostos", "Contabilidade", "Despesas Viagens", "Despesas Carros", "Despesas Diversas", "Custas / Notificações", "Tarifas Bancárias", "Investimentos", "Retiradas (Pró-labore)", "Terreno CBA"];
     const todas = Array.from(new Set([...padroes, ...cats])).sort();
-    $("#modal-cat").innerHTML = todas.map((c) => `<option>${escapeHtml(c)}</option>`).join("");
+    $("#modal-cat").innerHTML = todas.map(c => `<option>${escapeHtml(c)}</option>`).join("");
+  }
+
+  // Sugestão de categoria com IA enquanto digita
+  let sugTimer = null;
+  function sugerirCategoria() {
+    clearTimeout(sugTimer);
+    const desc = $("#modal-desc").value.trim();
+    if (desc.length < 5) { $("#modal-cat-hint").style.display = "none"; return; }
+    sugTimer = setTimeout(async () => {
+      $("#modal-cat-hint").style.display = "block";
+      $("#modal-cat-hint").innerHTML = `<span style="color:var(--accent)">IA</span> sugerindo categoria…`;
+      try {
+        const r = await apiPost("ia-categorizar", { descricao: desc, tipo: $("#modal-tipo").value });
+        if (r.categoria) {
+          $("#modal-cat").value = r.categoria;
+          $("#modal-cat-hint").innerHTML = `<span style="color:var(--accent)">IA</span> sugeriu: <strong>${escapeHtml(r.categoria)}</strong> · você pode trocar.`;
+        }
+      } catch (err) {
+        $("#modal-cat-hint").style.display = "none";
+      }
+    }, 600);
   }
 
   function fecharModal() { $("#modal").classList.remove("open"); }
 
-  // ----------------- ANEXOS -----------------
+  // ====== ANEXOS ======
   function renderAnexos(lista) {
     const wrap = $("#modal-anexos-lista");
-    if (!lista || lista.length === 0) {
-      wrap.innerHTML = `<div class="anexos-vazio">Nenhum anexo. Use o botão "Adicionar arquivo" abaixo.</div>`;
+    if (!lista || !lista.length) {
+      wrap.innerHTML = `<div class="anexos-vazio">Nenhum anexo. Use o botão abaixo.</div>`;
       return;
     }
     wrap.innerHTML = lista.map((a, i) => `
       <div class="anexo-item">
-        <span class="anexo-icon">📎</span>
         <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="anexo-nome">${escapeHtml(a.nome)}</a>
         <span class="anexo-meta">${fmtBytes(a.tamanho)}</span>
-        <button type="button" class="anexo-remover" data-i="${i}" title="Remover">×</button>
-      </div>
-    `).join("");
-    $$(".anexo-remover", wrap).forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const i = parseInt(btn.dataset.i, 10);
-        state.anexosPendentes.splice(i, 1);
-        renderAnexos(state.anexosPendentes);
-      });
-    });
+        <button type="button" class="anexo-remover" data-i="${i}">×</button>
+      </div>`).join("");
+    $$(".anexo-remover").forEach(b => b.addEventListener("click", () => {
+      state.anexosPendentes.splice(parseInt(b.dataset.i, 10), 1);
+      renderAnexos(state.anexosPendentes);
+    }));
   }
 
   async function uploadArquivos(files) {
     if (!files || !files.length) return;
     const status = $("#anexo-status");
-    status.textContent = `Enviando 0/${files.length}…`;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      // Limite de 25MB no Apps Script
-      if (file.size > 25 * 1024 * 1024) {
-        toast(`"${file.name}" > 25MB — pulado.`, true);
-        continue;
-      }
+      if (file.size > 25 * 1024 * 1024) { toast(`"${file.name}" > 25MB.`, true); continue; }
+      status.textContent = `Enviando ${i+1}/${files.length}…`;
       try {
         const base64 = await fileToBase64(file);
-        const res = await apiUpload({
-          nome: file.name,
-          mimeType: file.type || "application/octet-stream",
-          base64: base64,
-        });
-        state.anexosPendentes.push(res.arquivo);
-        status.textContent = `Enviado ${i + 1}/${files.length}`;
-      } catch (err) {
-        toast(`Falha em "${file.name}": ${err.message}`, true);
-      }
+        const r = await apiPost("upload", { arquivo: { nome: file.name, mimeType: file.type, base64 } });
+        state.anexosPendentes.push(r.arquivo);
+      } catch (err) { toast(`Falha em "${file.name}": ${err.message}`, true); }
     }
     status.textContent = "";
     renderAnexos(state.anexosPendentes);
   }
 
   function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
+    return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(file); });
   }
 
   async function salvarLancamento(ev) {
     ev.preventDefault();
     const id = $("#modal-id").value;
+    const tipo = $("#modal-tipo").value;
+    const aba = tipo === "entrada" ? "entradas" : "saidas";
     const lanc = {
       data: $("#modal-data").value,
       descricao: $("#modal-desc").value.trim(),
@@ -472,197 +594,163 @@
       categoria: $("#modal-cat").value,
       anexos: state.anexosPendentes,
     };
-    if (!lanc.data || !lanc.descricao || isNaN(lanc.valor)) {
-      toast("Preencha data, descrição e valor.", true);
-      return;
-    }
+    if (!lanc.data || !lanc.descricao || isNaN(lanc.valor)) { toast("Preencha data, descrição e valor.", true); return; }
     try {
       if (id) {
         lanc.id = id;
-        const r = await apiPost("editar", { lancamento: lanc });
-        const idx = state.dados.findIndex((x) => x.id === id);
-        if (idx >= 0) state.dados[idx] = r.lancamento;
+        const r = await apiPost("editar", { aba, lancamento: lanc });
+        const arr = tipo === "entrada" ? state.entradas : state.saidas;
+        const idx = arr.findIndex(x => x.id === id);
+        if (idx >= 0) arr[idx] = r.lancamento;
         toast("Lançamento atualizado.");
       } else {
-        const r = await apiPost("criar", { lancamento: lanc });
-        state.dados.push(r.lancamento);
+        const r = await apiPost("criar", { aba, lancamento: lanc });
+        const arr = tipo === "entrada" ? state.entradas : state.saidas;
+        arr.push(r.lancamento);
         toast("Lançamento criado.");
       }
       fecharModal();
-      localStorage.setItem(LS_KEY_CACHE, JSON.stringify({ ts: Date.now(), dados: state.dados }));
+      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
       popularFiltros();
-      render();
-    } catch (err) {
-      toast(err.message, true);
-    }
+      renderTodasAbas();
+    } catch (err) { toast(err.message, true); }
   }
 
   async function deletarLancamento() {
     const id = $("#modal-id").value;
     if (!id) return;
-    if (!confirm("Excluir este lançamento e os anexos vinculados? Não dá pra desfazer.")) return;
+    const tipo = $("#modal-tipo").value;
+    const aba = tipo === "entrada" ? "entradas" : "saidas";
+    if (!confirm("Excluir lançamento e seus anexos? Sem desfazer.")) return;
     try {
-      await apiPost("deletar", { lancamento: { id } });
-      state.dados = state.dados.filter((x) => x.id !== id);
-      toast("Lançamento removido.");
+      await apiPost("deletar", { aba, lancamento: { id } });
+      if (tipo === "entrada") state.entradas = state.entradas.filter(x => x.id !== id);
+      else state.saidas = state.saidas.filter(x => x.id !== id);
+      toast("Removido.");
       fecharModal();
-      localStorage.setItem(LS_KEY_CACHE, JSON.stringify({ ts: Date.now(), dados: state.dados }));
-      render();
-    } catch (err) {
-      toast(err.message, true);
-    }
+      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
+      renderTodasAbas();
+    } catch (err) { toast(err.message, true); }
   }
 
-  // ----------------- DRAWER CONFIG -----------------
+  // ====== DRAWER + TROCAR SENHA ======
   async function abrirDrawer() {
     $("#drawer-url").value = state.apiUrl;
     $("#drawer").classList.add("open");
     $("#drawer-backdrop").classList.add("open");
-    // Buscar email do dono via API ?aba=info
     try {
-      const url = new URL(state.apiUrl);
-      url.searchParams.set("token", state.token);
-      url.searchParams.set("aba", "info");
-      const r = await fetch(url.toString(), { method: "GET", redirect: "follow" });
-      const data = await r.json();
-      if (data.ok && data.emailOwner) {
-        $("#drawer-email").textContent = data.emailOwner;
-      }
-    } catch (e) {
-      $("#drawer-email").textContent = "—";
-    }
+      const r = await apiGet({ aba: "info" });
+      $("#drawer-email").textContent = r.emailOwner || "—";
+    } catch (e) { $("#drawer-email").textContent = "—"; }
   }
-  function fecharDrawer() {
-    $("#drawer").classList.remove("open");
-    $("#drawer-backdrop").classList.remove("open");
-  }
+  function fecharDrawer() { $("#drawer").classList.remove("open"); $("#drawer-backdrop").classList.remove("open"); }
 
-  // ----------------- MODAL TROCAR SENHA -----------------
-  function abrirTrocarSenha() {
-    $("#trocar-form").reset();
-    $("#trocar-msg").textContent = "";
-    $("#trocar-modal").classList.add("open");
-  }
-  function fecharTrocarSenha() { $("#trocar-modal").classList.remove("open"); }
-
+  function abrirTrocar() { $("#trocar-form").reset(); $("#trocar-msg").textContent=""; $("#trocar-msg").className="trocar-msg"; $("#trocar-modal").classList.add("open"); }
+  function fecharTrocar() { $("#trocar-modal").classList.remove("open"); }
   async function salvarNovaSenha(ev) {
     ev.preventDefault();
     const atual = $("#trocar-atual").value.trim();
     const nova = $("#trocar-nova").value.trim();
     const conf = $("#trocar-confirma").value.trim();
-    const msg = $("#trocar-msg");
-    msg.className = "trocar-msg";
-
-    if (atual !== state.token) {
-      msg.textContent = "Senha atual incorreta.";
-      msg.classList.add("err");
-      return;
-    }
-    if (nova.length < 6) {
-      msg.textContent = "Nova senha deve ter no mínimo 6 caracteres.";
-      msg.classList.add("err");
-      return;
-    }
-    if (nova !== conf) {
-      msg.textContent = "A confirmação não bate com a nova senha.";
-      msg.classList.add("err");
-      return;
-    }
-    if (nova === atual) {
-      msg.textContent = "A nova senha precisa ser diferente da atual.";
-      msg.classList.add("err");
-      return;
-    }
+    const msg = $("#trocar-msg"); msg.className = "trocar-msg";
+    if (atual !== state.token) { msg.textContent = "Senha atual incorreta."; msg.classList.add("err"); return; }
+    if (nova.length < 6) { msg.textContent = "Nova senha precisa ter 6+ caracteres."; msg.classList.add("err"); return; }
+    if (nova !== conf) { msg.textContent = "Confirmação não bate."; msg.classList.add("err"); return; }
+    if (nova === atual) { msg.textContent = "Senha nova precisa ser diferente da atual."; msg.classList.add("err"); return; }
     msg.textContent = "Enviando…";
     try {
       await apiPost("trocar-senha", { novaSenha: nova });
-      // Atualizar token local
-      state.token = nova;
-      localStorage.setItem(LS_KEY_TOKEN, nova);
-      msg.textContent = "✓ Senha alterada. Notificação enviada por email.";
-      msg.classList.add("ok");
-      setTimeout(() => { fecharTrocarSenha(); toast("Senha alterada com sucesso."); }, 1400);
-    } catch (err) {
-      msg.textContent = "Erro: " + err.message;
-      msg.classList.add("err");
-    }
+      state.token = nova; localStorage.setItem(LS_TOK, nova);
+      msg.textContent = "✓ Senha alterada. Notificação enviada."; msg.classList.add("ok");
+      setTimeout(() => { fecharTrocar(); toast("Senha alterada."); }, 1400);
+    } catch (err) { msg.textContent = "Erro: " + err.message; msg.classList.add("err"); }
   }
 
-  // ----------------- EXPORT CSV -----------------
+  // ====== EXPORT ======
   function exportarCSV() {
-    const filtrados = aplicarFiltros();
-    if (filtrados.length === 0) { toast("Nada para exportar.", true); return; }
-    const cols = ["data", "descricao", "valor", "categoria", "ano", "mes"];
-    const head = cols.join(";");
-    const rows = filtrados.map((x) => cols.map((c) => {
-      const v = x[c] == null ? "" : String(x[c]).replace(/"/g, '""');
+    const arr = dadosFiltrados();
+    if (!arr.length) { toast("Nada para exportar.", true); return; }
+    const cols = ["data","_t","descricao","valor","categoria","ano","mes"];
+    const head = ["data","tipo","descricao","valor","categoria","ano","mes"].join(";");
+    const rows = arr.map(x => cols.map(c => {
+      const v = x[c] == null ? "" : String(x[c]).replace(/"/g,'""');
       return /[;\n"]/.test(v) ? `"${v}"` : v;
     }).join(";"));
     const blob = new Blob(["﻿" + head + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `caixa-${CFG.aba}-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.download = `caixa-breda-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(a.href);
   }
 
-  // ----------------- INIT -----------------
+  // ====== INIT ======
   function bindEvents() {
-    $("#filtro-ano").addEventListener("change", (e) => { state.filtroAno = e.target.value || null; render(); });
-    $("#filtro-mes").addEventListener("change", (e) => { state.filtroMes = e.target.value || null; render(); });
-    $("#filtro-busca").addEventListener("input", (e) => { state.filtroBusca = e.target.value; render(); });
-    $("#btn-limpar").addEventListener("click", () => {
-      state.filtroAno = null; state.filtroMes = null;
-      state.filtroCategoria = null; state.filtroBusca = "";
-      $("#filtro-ano").value = ""; $("#filtro-mes").value = "";
-      $("#filtro-busca").value = "";
-      render();
-    });
+    $$(".tab").forEach(t => t.addEventListener("click", () => ativarTab(t.dataset.tab)));
 
+    // Movimentações
+    $("#filtro-ano").addEventListener("change", e => { state.filtroAno = e.target.value || null; renderMovimentacoes(); });
+    $("#filtro-mes").addEventListener("change", e => { state.filtroMes = e.target.value || null; renderMovimentacoes(); });
+    $("#filtro-busca").addEventListener("input", e => { state.filtroBusca = e.target.value; renderMovimentacoes(); });
+    $("#btn-limpar").addEventListener("click", () => {
+      state.filtroAno=null; state.filtroMes=null; state.filtroCategoria=null; state.filtroBusca="";
+      state.filtroTipos = {entrada:true, saida:true};
+      $("#filtro-ano").value=""; $("#filtro-mes").value=""; $("#filtro-busca").value="";
+      renderMovimentacoes();
+    });
+    $("#btn-exportar").addEventListener("click", exportarCSV);
+    $$(".chip[data-tipo]").forEach(btn => btn.addEventListener("click", () => {
+      state.filtroTipos[btn.dataset.tipo] = !state.filtroTipos[btn.dataset.tipo];
+      renderMovimentacoes();
+    }));
+
+    // Análise
+    $("#ano-analise").addEventListener("change", e => { state.anoAnalise = parseInt(e.target.value,10); renderAnalise(); });
+
+    // Modal
     $("#fab-novo").addEventListener("click", abrirModalNovo);
     $("#btn-fechar-modal").addEventListener("click", fecharModal);
     $("#btn-cancelar").addEventListener("click", fecharModal);
     $("#btn-deletar").addEventListener("click", deletarLancamento);
     $("#modal-form").addEventListener("submit", salvarLancamento);
-    $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") fecharModal(); });
+    $("#modal").addEventListener("click", e => { if (e.target.id === "modal") fecharModal(); });
+    $("#modal-anexo-input").addEventListener("change", e => { uploadArquivos(Array.from(e.target.files)); e.target.value=""; });
+    $("#modal-desc").addEventListener("input", sugerirCategoria);
+    $("#modal-tipo").addEventListener("change", () => popularSelectCategorias($("#modal-tipo").value));
 
-    // Anexos
-    $("#modal-anexo-input").addEventListener("change", (e) => {
-      uploadArquivos(Array.from(e.target.files));
-      e.target.value = "";
-    });
-
+    // Drawer
     $("#btn-config").addEventListener("click", abrirDrawer);
     $("#btn-fechar-drawer").addEventListener("click", fecharDrawer);
     $("#drawer-backdrop").addEventListener("click", fecharDrawer);
     $("#btn-logout").addEventListener("click", () => { fecharDrawer(); logout(); });
-    $("#btn-recarregar").addEventListener("click", carregar);
-    $("#btn-exportar").addEventListener("click", exportarCSV);
+    $("#btn-recarregar").addEventListener("click", () => { carregarTudo(); state._previsaoLoaded = false; });
 
     // Trocar senha
-    $("#btn-trocar-senha").addEventListener("click", () => { fecharDrawer(); abrirTrocarSenha(); });
-    $("#btn-fechar-trocar").addEventListener("click", fecharTrocarSenha);
-    $("#btn-cancelar-trocar").addEventListener("click", fecharTrocarSenha);
+    $("#btn-trocar-senha").addEventListener("click", () => { fecharDrawer(); abrirTrocar(); });
+    $("#btn-fechar-trocar").addEventListener("click", fecharTrocar);
+    $("#btn-cancelar-trocar").addEventListener("click", fecharTrocar);
     $("#trocar-form").addEventListener("submit", salvarNovaSenha);
-    $("#trocar-modal").addEventListener("click", (e) => { if (e.target.id === "trocar-modal") fecharTrocarSenha(); });
+    $("#trocar-modal").addEventListener("click", e => { if (e.target.id === "trocar-modal") fecharTrocar(); });
+
+    // Chat
+    $("#chat-send").addEventListener("click", chatEnviar);
+    $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter") chatEnviar(); });
 
     // Login
     $("#login-form").addEventListener("submit", fazerLogin);
+
+    // Tab inicial via hash
+    window.addEventListener("hashchange", () => {
+      const tab = location.hash.replace("#","") || "insights";
+      if (["insights","movimentacoes","analise"].includes(tab)) ativarTab(tab);
+    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    if (CFG.titulo) document.title = CFG.titulo + " · Breda Advocacia";
-    $("#app-titulo-principal").textContent = CFG.titulo || "Caixa";
-    $("#app-titulo-sub").textContent = CFG.subtitulo || "";
-
     bindEvents();
+    ativarTab(state.abaAtiva);
 
-    if (!state.apiUrl || !state.token) {
-      abrirLogin("Configure a URL e digite sua senha.");
-      $("#loader").style.display = "none";
-      return;
-    }
-    carregar();
+    if (!state.apiUrl || !state.token) { abrirLogin("Configure URL e senha."); return; }
+    carregarTudo();
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./assets/sw.js").catch(() => {});

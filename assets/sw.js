@@ -1,15 +1,11 @@
-/* Service Worker — Caixa Breda Advocacia
-   Estratégia: network-first para APIs, cache-first para assets estáticos */
-const CACHE = "caixa-breda-v2";
+/* Service Worker — Caixa Breda v4 */
+const CACHE = "caixa-breda-v4";
 const ASSETS = [
   "./",
   "./index.html",
-  "./escritorio.html",
-  "./clientes.html",
-  "./painel.html",
+  "./app.html",
   "./assets/style.css",
   "./assets/app.js",
-  "./assets/painel.js",
 ];
 
 self.addEventListener("install", (ev) => {
@@ -19,18 +15,14 @@ self.addEventListener("install", (ev) => {
 
 self.addEventListener("activate", (ev) => {
   ev.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (ev) => {
   const url = new URL(ev.request.url);
-  // Apps Script API → sempre rede (com fallback nulo, app já usa localStorage)
   if (url.hostname.includes("script.google.com")) return;
-  // Demais GETs do mesmo origin → cache-first
   if (ev.request.method !== "GET") return;
   ev.respondWith(
     caches.match(ev.request).then((cached) => {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#fafaf9"/>
+  <rect x="56" y="56" width="400" height="400" rx="60" fill="none" stroke="#ececea" stroke-width="3"/>
+  <text x="256" y="318" text-anchor="middle" font-family="Inter, sans-serif" font-size="216" font-weight="700" fill="#3d6b5a" letter-spacing="-8">C</text>
+  <text x="256" y="400" text-anchor="middle" font-family="Inter, sans-serif" font-size="26" font-weight="700" fill="#3d6b5a" letter-spacing="8">CAIXA</text>
+  <text x="256" y="435" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="500" fill="#9aa0a6" letter-spacing="3">BREDA ADVOCACIA</text>
+</svg>

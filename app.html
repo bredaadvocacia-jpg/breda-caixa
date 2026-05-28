@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Caixa · Breda Advocacia</title>
+  <meta name="theme-color" content="#fafaf9" />
+  <link rel="manifest" href="./assets/manifest.json" />
+  <link rel="icon" href="./assets/icons/icon-192.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">Caixa</span>
+      <span class="brand-name">Breda Advocacia</span>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" data-tab="insights" role="tab">Insights</button>
+      <button class="tab" data-tab="movimentacoes" role="tab">Movimentações</button>
+      <button class="tab" data-tab="analise" role="tab">Análise</button>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-recarregar" title="Recarregar">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.4M3 12a9 9 0 0 1 15.5-6.4M21 5v5h-5M3 19v-5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-config" title="Configurações">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ─────── TAB: INSIGHTS ─────── -->
+<div data-tab-content="insights">
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Visão geral</div>
+      <div class="section-meta" id="periodo-atual">—</div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Receita do mês</div>
+        <div class="stat-value pos" id="stat-receita-mes">—</div>
+        <div class="stat-sub" id="stat-receita-sub">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Despesa do mês</div>
+        <div class="stat-value neg" id="stat-despesa-mes">—</div>
+        <div class="stat-sub" id="stat-despesa-sub">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Saldo</div>
+        <div class="stat-value" id="stat-saldo-mes">—</div>
+        <div class="stat-sub" id="stat-saldo-sub">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Margem</div>
+        <div class="stat-value" id="stat-margem">—</div>
+        <div class="stat-sub">resultado / receita</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Alertas detectados pela IA</div>
+      <div class="section-meta" id="alertas-meta">—</div>
+    </div>
+    <div id="alertas" class="alerts">
+      <div class="alert"><span class="alert-icon">⏳</span><span>Carregando…</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Resumo executivo</div>
+      <div class="section-meta">gerado por IA</div>
+    </div>
+    <div class="ai-block">
+      <div class="ai-tag">Análise do mês</div>
+      <div class="ai-text" id="resumo-ia"><span class="ai-loading">Analisando dados…</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Pergunte ao seu caixa</div>
+      <div class="section-meta">conversa em linguagem natural</div>
+    </div>
+    <div class="chat-box">
+      <div class="chat-log" id="chat-log"></div>
+      <div class="chat-input-row">
+        <input type="text" class="chat-input" id="chat-input" placeholder="ex: qual cliente paga mais? como foi maio vs abril?" />
+        <button class="chat-send" id="chat-send">Perguntar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────── TAB: MOVIMENTAÇÕES ─────── -->
+<div data-tab-content="movimentacoes" hidden>
+  <div class="section">
+    <div class="filters">
+      <div class="chips">
+        <button class="chip tipo-entrada active" data-tipo="entrada">Entradas</button>
+        <button class="chip tipo-saida active" data-tipo="saida">Saídas</button>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="field-inline">
+        <label>Ano</label>
+        <select id="filtro-ano"></select>
+      </div>
+      <div class="field-inline">
+        <label>Mês</label>
+        <select id="filtro-mes"></select>
+      </div>
+      <div class="field-inline search-wrap">
+        <label>Buscar descrição</label>
+        <input class="input" id="filtro-busca" type="text" placeholder="ex: honorários, VIVO, sucumbência…" />
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-limpar">Limpar filtros</button>
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-exportar">Exportar CSV</button>
+      </div>
+    </div>
+    <div class="chips" id="chips-categorias"></div>
+
+    <div id="loader-mov" class="loader" style="display:none">
+      <div class="spinner"></div><span>Carregando lançamentos…</span>
+    </div>
+
+    <div class="tbl-wrap" id="tabela-card">
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:100px">Data</th>
+              <th style="width:70px">Tipo</th>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th style="text-align:right; width:140px">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section-meta" id="tabela-meta" style="text-align:right; margin-top:12px">—</div>
+  </div>
+</div>
+
+<!-- ─────── TAB: ANÁLISE ─────── -->
+<div data-tab-content="analise" hidden>
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Ano de análise</div>
+    </div>
+    <select id="ano-analise" class="input" style="max-width:160px"></select>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><div class="section-title">Receitas × Despesas (12 meses)</div></div>
+    <div class="card"><canvas id="chart-rxd" style="max-height:280px"></canvas></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><div class="section-title">Saldo acumulado</div></div>
+    <div class="card"><canvas id="chart-saldo" style="max-height:220px"></canvas></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><div class="section-title">Composição</div></div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="card-head"><div class="card-title">Top despesas</div></div>
+        <canvas id="chart-top-saidas" style="max-height:300px"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="card-head"><div class="card-title">Top receitas</div></div>
+        <canvas id="chart-top-entradas" style="max-height:300px"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Previsão · próximos 3 meses</div>
+      <div class="section-meta">gerada por IA</div>
+    </div>
+    <div class="forecast-grid" id="forecast-grid">
+      <div class="forecast-month">
+        <div class="forecast-mes">Carregando…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><div class="section-title">Resumo mensal</div></div>
+    <div class="tbl-wrap">
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Mês</th>
+              <th style="text-align:right">Receitas</th>
+              <th style="text-align:right">Despesas</th>
+              <th style="text-align:right">Saldo</th>
+              <th style="text-align:right; width:90px">Margem</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-mensal"></tbody>
+          <tfoot>
+            <tr style="background:var(--line-soft); font-weight:600">
+              <td style="padding:12px 16px">Total do ano</td>
+              <td class="col-valor" id="tot-rec"></td>
+              <td class="col-valor" id="tot-des"></td>
+              <td class="col-valor" id="tot-sal"></td>
+              <td class="col-valor" id="tot-mar"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<button class="fab" id="fab-novo">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  Novo lançamento
+</button>
+
+<!-- MODAL LANÇAMENTO -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modal-titulo">Novo lançamento</h2>
+      <button class="close-btn" id="btn-fechar-modal">×</button>
+    </div>
+    <form id="modal-form" autocomplete="off">
+      <input type="hidden" id="modal-id" />
+      <div class="modal-body">
+        <div class="field">
+          <label>Tipo</label>
+          <select id="modal-tipo">
+            <option value="saida">Saída (despesa)</option>
+            <option value="entrada">Entrada (receita)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="modal-data" required />
+        </div>
+        <div class="field">
+          <label>Descrição</label>
+          <textarea id="modal-desc" rows="2" required placeholder="ex: VIVO mês 06"></textarea>
+          <div class="field-hint" id="modal-cat-hint" style="display:none">
+            <span class="ai-tag" style="margin:0">IA</span> sugerindo categoria…
+          </div>
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input type="number" id="modal-valor" step="0.01" min="0" required placeholder="0,00" />
+        </div>
+        <div class="field">
+          <label>Categoria</label>
+          <select id="modal-cat" required></select>
+        </div>
+        <div class="field">
+          <label>Anexos</label>
+          <div class="anexos-wrap">
+            <div id="modal-anexos-lista"></div>
+            <label class="btn-anexar">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Anexar arquivo
+              <input type="file" id="modal-anexo-input" multiple accept="image/*,.pdf,.doc,.docx" />
+            </label>
+            <span class="anexo-status" id="anexo-status"></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-danger" id="btn-deletar" style="display:none">Excluir</button>
+        <button type="button" class="btn btn-ghost" id="btn-cancelar">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- DRAWER CONFIG -->
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>Configurações</h2>
+    <button class="icon-btn" id="btn-fechar-drawer">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>Conta administradora</label>
+      <div class="info-row" id="drawer-email">…</div>
+      <div class="field-hint">Recebe notificações de troca de senha.</div>
+    </div>
+    <div class="field">
+      <label>URL da API</label>
+      <input id="drawer-url" type="url" readonly />
+    </div>
+    <button class="btn btn-primary" id="btn-trocar-senha" style="width:100%; margin-top:8px">
+      Trocar senha
+    </button>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" id="btn-logout" style="width:100%">Sair</button>
+  </div>
+</aside>
+
+<!-- MODAL TROCAR SENHA -->
+<div class="modal-backdrop" id="trocar-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Trocar senha</h2>
+      <button class="close-btn" id="btn-fechar-trocar">×</button>
+    </div>
+    <form id="trocar-form" autocomplete="off">
+      <div class="modal-body">
+        <div class="trocar-msg" id="trocar-msg"></div>
+        <div class="field">
+          <label>Senha atual</label>
+          <input id="trocar-atual" type="password" required autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <label>Nova senha (mín. 6 caracteres)</label>
+          <input id="trocar-nova" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label>Confirmar nova senha</label>
+          <input id="trocar-confirma" type="password" minlength="6" required autocomplete="new-password" />
+        </div>
+        <div class="field-hint">Uma notificação é enviada para a conta administradora.</div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="btn-cancelar-trocar">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Trocar senha</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-card">
+    <div class="login-brand">Caixa</div>
+    <div class="login-sub">Breda Advocacia</div>
+    <h2>Acesso</h2>
+    <form id="login-form" autocomplete="off">
+      <div class="login-msg" id="login-msg">&nbsp;</div>
+      <div class="field">
+        <label>URL da API</label>
+        <input id="login-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" required />
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input id="login-senha" type="password" placeholder="••••••••" required autocomplete="current-password" />
+      </div>
+      <button type="submit" class="btn btn-primary">Entrar</button>
+      <small>Esqueceu a senha? Abra a planilha, execute <code>resetarSenha</code> pelo Apps Script.</small>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
