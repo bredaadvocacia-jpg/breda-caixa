@@ -19,6 +19,8 @@
     filtroCategoria: null,
     filtroBusca: "",
     filtroTipos: { entrada: true, saida: true },
+    filtroDataDe: "",
+    filtroDataAte: "",
     anoAnalise: new Date().getFullYear(),
     anexosPendentes: [],
     charts: {},
@@ -224,7 +226,7 @@
     apiGet({ aba: "ia", acao: "resumo" }).then(r => {
       $("#resumo-ia").textContent = r.texto || "(sem resposta)";
     }).catch(err => {
-      $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}. Configure a chave Gemini pelo editor Apps Script (rode <code>setarChaveGemini</code>).</span>`;
+      $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}</span>`;
     });
 
     // Alertas
@@ -364,6 +366,9 @@
       const q = state.filtroBusca.toLowerCase();
       arr = arr.filter(x => (x.descricao || "").toLowerCase().includes(q));
     }
+    // Range de datas (ISO YYYY-MM-DD) — string compare funciona
+    if (state.filtroDataDe) arr = arr.filter(x => (x.data || "") >= state.filtroDataDe);
+    if (state.filtroDataAte) arr = arr.filter(x => (x.data || "") <= state.filtroDataAte);
     return arr;
   }
 
@@ -971,10 +976,50 @@
     $("#btn-limpar").addEventListener("click", () => {
       state.filtroAno=null; state.filtroMes=null; state.filtroCategoria=null; state.filtroBusca="";
       state.filtroTipos = {entrada:true, saida:true};
+      state.filtroDataDe = ""; state.filtroDataAte = "";
       $("#filtro-ano").value=""; $("#filtro-mes").value=""; $("#filtro-busca").value="";
+      $("#filtro-data-de").value=""; $("#filtro-data-ate").value="";
       renderMovimentacoes();
     });
     $("#btn-exportar").addEventListener("click", exportarCSV);
+
+    // Período (range de datas)
+    $("#filtro-data-de").addEventListener("change", e => { state.filtroDataDe = e.target.value; renderMovimentacoes(); });
+    $("#filtro-data-ate").addEventListener("change", e => { state.filtroDataAte = e.target.value; renderMovimentacoes(); });
+
+    // Presets de período
+    $$(".btn-preset").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const hoje = new Date();
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        let de = "", ate = "";
+        switch (btn.dataset.preset) {
+          case "30d": {
+            const ini = new Date(hoje); ini.setDate(ini.getDate() - 30);
+            de = fmt(ini); ate = fmt(hoje); break;
+          }
+          case "90d": {
+            const ini = new Date(hoje); ini.setDate(ini.getDate() - 90);
+            de = fmt(ini); ate = fmt(hoje); break;
+          }
+          case "ano": {
+            de = hoje.getFullYear() + "-01-01"; ate = hoje.getFullYear() + "-12-31"; break;
+          }
+          case "anoant": {
+            const y = hoje.getFullYear() - 1;
+            de = y + "-01-01"; ate = y + "-12-31"; break;
+          }
+          case "tudo": { de = ""; ate = ""; break; }
+        }
+        state.filtroDataDe = de; state.filtroDataAte = ate;
+        $("#filtro-data-de").value = de; $("#filtro-data-ate").value = ate;
+        if (de || ate) {
+          state.filtroAno = null; state.filtroMes = null;
+          $("#filtro-ano").value = ""; $("#filtro-mes").value = "";
+        }
+        renderMovimentacoes();
+      });
+    });
     $$(".chip[data-tipo]").forEach(btn => btn.addEventListener("click", () => {
       state.filtroTipos[btn.dataset.tipo] = !state.filtroTipos[btn.dataset.tipo];
       renderMovimentacoes();

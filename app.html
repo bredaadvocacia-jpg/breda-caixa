@@ -177,6 +177,26 @@
         <button class="btn btn-ghost" id="btn-exportar">Exportar CSV</button>
       </div>
     </div>
+    <div class="filters" style="margin-top:-8px">
+      <div class="field-inline" style="min-width:140px">
+        <label>Período · de</label>
+        <input class="input" id="filtro-data-de" type="date" />
+      </div>
+      <div class="field-inline" style="min-width:140px">
+        <label>Período · até</label>
+        <input class="input" id="filtro-data-ate" type="date" />
+      </div>
+      <div class="field-inline" style="flex:1; min-width:160px">
+        <label>&nbsp;</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          <button class="btn btn-ghost btn-preset" data-preset="30d" style="padding:7px 11px; font-size:12px">Últ. 30 dias</button>
+          <button class="btn btn-ghost btn-preset" data-preset="90d" style="padding:7px 11px; font-size:12px">Últ. 90 dias</button>
+          <button class="btn btn-ghost btn-preset" data-preset="ano" style="padding:7px 11px; font-size:12px">Este ano</button>
+          <button class="btn btn-ghost btn-preset" data-preset="anoant" style="padding:7px 11px; font-size:12px">Ano anterior</button>
+          <button class="btn btn-ghost btn-preset" data-preset="tudo" style="padding:7px 11px; font-size:12px">Tudo</button>
+        </div>
+      </div>
+    </div>
     <div class="chips" id="chips-categorias"></div>
 
     <div id="loader-mov" class="loader" style="display:none">
