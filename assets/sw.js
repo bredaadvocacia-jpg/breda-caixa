@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v8 (identidade visual Breda Advocacia) */
-const CACHE = "caixa-breda-v8";
+/* Service Worker — Caixa Breda v9 (logo premium) */
+const CACHE = "caixa-breda-v9";
 const ASSETS = [
   "./",
   "./index.html",

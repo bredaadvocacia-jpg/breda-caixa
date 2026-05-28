@@ -948,9 +948,9 @@ td.col-valor.neg { color: var(--neg); }
 }
 .login-logo {
   display: block;
-  width: 200px;
+  width: 240px;
   height: auto;
-  margin: 0 auto 18px;
+  margin: 0 auto 8px;
 }
 .login-sub {
   font-size: 11px;
