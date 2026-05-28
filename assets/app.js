@@ -213,10 +213,13 @@
     }
     popularFiltros();
     renderTodasAbas();
+    state._previsaoLoaded = false;  // permite recarregar previsão pós-login
     carregarIA();
+    if (state.abaAtiva === "analise") carregarPrevisao();
   }
 
   async function carregarIA() {
+    if (!state.apiUrl || !state.token) return;
     // Resumo
     apiGet({ aba: "ia", acao: "resumo" }).then(r => {
       $("#resumo-ia").textContent = r.texto || "(sem resposta)";
@@ -245,6 +248,8 @@
   }
 
   async function carregarPrevisao() {
+    // Não faz nada se ainda não logou — quando logar, o carregarTudo reseta a flag
+    if (!state.apiUrl || !state.token) return;
     const wrap = $("#forecast-grid");
     wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">Gerando previsão…</div></div>`;
     try {
@@ -252,6 +257,7 @@
       const meses = (r.previsao && r.previsao.meses) || [];
       if (!meses.length) {
         wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">—</div><div class="forecast-notas">${escapeHtml(r.previsao && r.previsao.erro || "Sem dados suficientes")}</div></div>`;
+        state._previsaoLoaded = true;
         return;
       }
       wrap.innerHTML = meses.map(m => {
@@ -267,8 +273,12 @@
             ${m.notas ? `<div class="forecast-notas">${escapeHtml(m.notas)}</div>` : ""}
           </div>`;
       }).join("");
+      state._previsaoLoaded = true;  // só marca como carregado em caso de sucesso
     } catch (err) {
-      wrap.innerHTML = `<div class="forecast-month"><div class="forecast-mes">IA indisponível</div><div class="forecast-notas">${escapeHtml(err.message)}</div></div>`;
+      state._previsaoLoaded = false;  // permite retry
+      wrap.innerHTML = `<div class="forecast-month" style="grid-column:1/-1; text-align:center; padding:24px"><div class="forecast-mes">IA indisponível</div><div class="forecast-notas" style="border:none; margin-top:8px">${escapeHtml(err.message)}</div><button class="btn btn-ghost" style="margin-top:14px" id="btn-retry-previsao">Tentar novamente</button></div>`;
+      const retry = document.getElementById("btn-retry-previsao");
+      if (retry) retry.addEventListener("click", carregarPrevisao);
     }
   }
 
@@ -281,7 +291,7 @@
     if (name === "analise") {
       popularSelectAno();
       renderAnalise();
-      if (!state._previsaoLoaded) { carregarPrevisao(); state._previsaoLoaded = true; }
+      if (!state._previsaoLoaded) carregarPrevisao();  // a função só marca _previsaoLoaded em caso de sucesso
     }
   }
 
