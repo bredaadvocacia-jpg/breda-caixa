@@ -932,8 +932,8 @@ td.col-valor.neg { color: var(--neg); }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 44px 40px;
-  max-width: 400px;
+  padding: 40px 36px 44px;
+  max-width: 440px;
   width: 100%;
   box-shadow: var(--sh-4);
 }
@@ -948,9 +948,10 @@ td.col-valor.neg { color: var(--neg); }
 }
 .login-logo {
   display: block;
-  width: 240px;
+  width: 340px;
+  max-width: 90%;
   height: auto;
-  margin: 0 auto 8px;
+  margin: 0 auto 10px;
 }
 .login-sub {
   font-size: 11px;
