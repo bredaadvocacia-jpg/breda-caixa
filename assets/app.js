@@ -299,25 +299,31 @@
 
   /** Pega o texto cru do resumo e melhora formatação:
    *  - converte YYYY-MM em "Mês YYYY"
-   *  - destaca valores em R$
-   *  - quebra parágrafos por linha em branco
+   *  - destaca valores em R$ e percentuais
+   *  - quebra blocos por linha em branco (\n\n) → <p>
+   *  - quebra simples (\n) dentro do bloco → <br>
    *  - escapa HTML antes de aplicar transformações
    */
   function formatarResumo(txt) {
-    let t = escapeHtml(txt);
+    let t = escapeHtml((txt || "").trim());
     // YYYY-MM → Mês YYYY
     t = t.replace(/(\d{4})-(\d{2})/g, (_, y, m) => {
       const idx = parseInt(m, 10) - 1;
       if (idx < 0 || idx > 11) return `${y}-${m}`;
       return `${MESES_PT[idx]} ${y}`;
     });
-    // Valores soltos "R$ X.XXX,XX" e "X.XXX,XX" — destacar em bold
+    // Valores R$ X.XXX,XX em destaque
     t = t.replace(/(R\$\s?[\d.]+,\d{2})/g, '<strong class="resumo-num">$1</strong>');
     // Percentuais
     t = t.replace(/([+-]?\d+[,.]\d+%)/g, '<strong class="resumo-pct">$1</strong>');
-    // Quebras de parágrafo
-    const paragrafos = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
-    return paragrafos.map(p => `<p>${p.replace(/\n/g, " ")}</p>`).join("");
+    // Normalizar 3+ quebras em 2 (pra não criar parágrafos vazios)
+    t = t.replace(/\n{3,}/g, "\n\n");
+    // Dividir em blocos por linha em branco
+    const blocos = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    return blocos.map(bloco => {
+      const linhas = bloco.split(/\n/).map(l => l.trim()).filter(Boolean);
+      return `<p>${linhas.join("<br>")}</p>`;
+    }).join("");
   }
 
   async function carregarPrevisao() {

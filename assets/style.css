@@ -450,8 +450,12 @@ main {
 }
 
 /* ============ RESUMO IA — formatação ============ */
-.ai-text p { margin-bottom: 12px; }
+.ai-text p {
+  margin-bottom: 18px;
+  line-height: 1.65;
+}
 .ai-text p:last-child { margin-bottom: 0; }
+.ai-text p br { display: block; content: ""; margin-top: 4px; }
 .ai-text .resumo-num {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
