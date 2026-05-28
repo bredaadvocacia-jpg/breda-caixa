@@ -1,7 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#fafaf9"/>
-  <rect x="56" y="56" width="400" height="400" rx="60" fill="none" stroke="#ececea" stroke-width="3"/>
-  <text x="256" y="318" text-anchor="middle" font-family="Inter, sans-serif" font-size="216" font-weight="700" fill="#3d6b5a" letter-spacing="-8">C</text>
-  <text x="256" y="400" text-anchor="middle" font-family="Inter, sans-serif" font-size="26" font-weight="700" fill="#3d6b5a" letter-spacing="8">CAIXA</text>
-  <text x="256" y="435" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="500" fill="#9aa0a6" letter-spacing="3">BREDA ADVOCACIA</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="iconBg512" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8a6b22"/>
+      <stop offset="100%" stop-color="#6b5118"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="80" fill="url(#iconBg512)"/>
+  <g fill="#f5efe1" transform="translate(96 70) scale(2.6)">
+    <rect x="28" y="28" width="64" height="7" rx="1.5"/>
+    <path d="M 56 35 L 56 60 L 71 60 A 12.5 12.5 0 0 0 71 35 Z M 64 42 L 71 42 A 5.5 5.5 0 0 1 71 53 L 64 53 Z" fill-rule="evenodd"/>
+    <path d="M 56 60 L 56 88 L 73 88 A 14 14 0 0 0 73 60 Z M 64 67 L 73 67 A 7 7 0 0 1 73 81 L 64 81 Z" fill-rule="evenodd"/>
+    <rect x="30" y="38" width="6" height="50" rx="1"/>
+    <rect x="40" y="38" width="6" height="50" rx="1"/>
+    <rect x="50" y="38" width="6" height="50" rx="1"/>
+    <rect x="28" y="88" width="32" height="7" rx="1.5"/>
+  </g>
+  <text x="256" y="450" text-anchor="middle" font-family="Inter, sans-serif" font-size="28" font-weight="700" fill="#f5efe1" letter-spacing="10">CAIXA</text>
+  <text x="256" y="478" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="500" fill="#f5efe1" opacity=".7" letter-spacing="4">BREDA ADVOCACIA</text>
 </svg>

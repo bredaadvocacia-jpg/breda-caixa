@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v7 */
-const CACHE = "caixa-breda-v7";
+/* Service Worker — Caixa Breda v8 (identidade visual Breda Advocacia) */
+const CACHE = "caixa-breda-v8";
 const ASSETS = [
   "./",
   "./index.html",

@@ -5,28 +5,28 @@
    ===================================================================== */
 
 :root {
-  /* Palette */
-  --bg:        #f7f7f5;
+  /* Palette · identidade Breda Advocacia */
+  --bg:        #faf8f3;        /* off-white quente */
   --bg-2:      #ffffff;
   --surface:   #ffffff;
-  --surface-2: #fbfaf8;
-  --line:      #e7e6e2;
-  --line-2:    #efeeea;
-  --line-soft: #f3f3f0;
-  --ink:       #0d0d0c;
-  --ink-2:     #2e3033;
-  --ink-3:     #5e6469;
-  --ink-4:     #8e949b;
-  --ink-5:     #b3b7bd;
+  --surface-2: #fcfaf5;
+  --line:      #e9e5db;
+  --line-2:    #efebe2;
+  --line-soft: #f5f1e8;
+  --ink:       #2a2920;        /* grafite quente da logo */
+  --ink-2:     #3a3830;
+  --ink-3:     #6b665a;
+  --ink-4:     #9b958a;
+  --ink-5:     #c2bdb2;
 
-  --accent:        #3d6b5a;
-  --accent-2:      #2d5246;
-  --accent-3:      #d8e3dd;
-  --accent-soft:   #ecf2ee;
-  --accent-bg:     #f2f6f3;
+  --accent:        #7c5e1e;    /* dourado-mostarda da logo Breda */
+  --accent-2:      #604718;    /* dourado escuro hover */
+  --accent-3:      #d9c992;    /* dourado pálido */
+  --accent-soft:   #f3ead4;    /* dourado bem claro pra fundo */
+  --accent-bg:     #faf3df;    /* dourado quase imperceptível */
 
-  --pos:           #2d6f57;
-  --pos-bg:        #ecf4ef;
+  --pos:           #2d6f44;    /* verde sóbrio mantém positivo */
+  --pos-bg:        #e7f1e3;
   --neg:           #963a3d;
   --neg-bg:        #fbecec;
   --warn:          #8a6920;
@@ -62,8 +62,8 @@ html, body {
   line-height: 1.5;
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at -10% -200px, rgba(61,107,90,.05), transparent 60%),
-    radial-gradient(1000px 500px at 110% -100px, rgba(61,107,90,.03), transparent 60%),
+    radial-gradient(1200px 600px at -10% -200px, rgba(124,94,30,.06), transparent 60%),
+    radial-gradient(1000px 500px at 110% -100px, rgba(124,94,30,.04), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
@@ -100,17 +100,14 @@ button { font-family: inherit; }
   gap: 12px;
 }
 .brand-logo {
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #4a7a68, var(--accent));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: -.5px;
-  box-shadow: 0 2px 4px rgba(61,107,90,.25), 0 1px 0 rgba(255,255,255,.2) inset;
+  width: 34px; height: 34px;
+  border-radius: 6px;
+  background-image: url("./icons/logo-mark.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  box-shadow: 0 2px 4px rgba(124,94,30,.18), 0 1px 0 rgba(255,255,255,.2) inset;
+  flex-shrink: 0;
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .brand-mark {
@@ -945,12 +942,20 @@ td.col-valor.neg { color: var(--neg); }
   font-weight: 700;
   margin-bottom: 4px;
 }
+.login-logo {
+  display: block;
+  width: 200px;
+  height: auto;
+  margin: 0 auto 18px;
+}
 .login-sub {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-4);
   text-align: center;
   margin-bottom: 30px;
-  letter-spacing: .3px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 .login-card h2 {
   font-size: 20px;
