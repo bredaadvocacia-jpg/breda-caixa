@@ -890,12 +890,16 @@
     const btn = $("#btn-instalar");
     const hint = $("#instalar-hint");
     const hintTxt = $("#instalar-hint-texto");
+    if (!btn) return;  // safety
 
-    // Detecta se já está rodando como app instalado
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches
-                       || window.navigator.standalone === true;
+    // SEMPRE exibe o botão (a UI decide o texto depois)
+    btn.style.display = "block";
+
+    // 1. Já está rodando como app instalado (standalone)
+    const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
+                       || window.navigator.standalone === true
+                       || document.referrer.startsWith("android-app://");
     if (isStandalone) {
-      btn.style.display = "block";
       btn.textContent = "✓ Você já está usando o app instalado";
       btn.disabled = true;
       btn.style.opacity = ".6";
@@ -903,56 +907,57 @@
       return;
     }
 
-    // Captura o evento de instalação (Chrome/Edge desktop, Android)
+    // 2. Texto inicial (vai ser sobrescrito se o evento nativo disparar)
+    btn.textContent = "📲 Instalar como app no dispositivo";
+
+    // 3. Captura evento nativo (Chrome/Edge desktop, Chrome Android) — pode demorar
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      btn.style.display = "block";
     });
 
+    // 4. Detecção de plataforma para instruções específicas
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isAndroid = /Android/.test(ua);
+    const isChrome = /Chrome/.test(ua) && !/Edg|OPR/.test(ua);
+    const isEdge = /Edg/.test(ua);
+    const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+    const isMac = /Macintosh/.test(ua);
+
+    // 5. Único handler de clique — decide o que fazer
     btn.addEventListener("click", async () => {
+      // Se o evento nativo está disponível → usa
       if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === "accepted") {
-          toast("App instalado ✓");
-          btn.style.display = "none";
-        }
+        try {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === "accepted") {
+            toast("App instalado ✓");
+            btn.style.display = "none";
+            hint.style.display = "none";
+          }
+        } catch (e) { /* user dismissed */ }
         deferredPrompt = null;
+        return;
       }
+
+      // Caso contrário, mostra instruções específicas
+      hint.style.display = "block";
+      let html = "";
+      if (isIOS) {
+        html = `<strong>iPhone / iPad:</strong> abra esta página no <strong>Safari</strong> → toque no botão <strong>Compartilhar</strong> (quadrado com ↑) na barra inferior → role e toque em <strong>Adicionar à Tela de Início</strong>.`;
+      } else if (isAndroid) {
+        html = `<strong>Android (Chrome):</strong> abra o menu (⋮) → toque em <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>. Se não aparecer, atualize a página e tente novamente.`;
+      } else if (isSafari && isMac) {
+        html = `<strong>Safari no Mac:</strong> menu <strong>Arquivo → Adicionar à Dock…</strong>. Para uma instalação mais robusta, use Chrome ou Edge.`;
+      } else if (isChrome || isEdge) {
+        html = `<strong>${isEdge ? "Edge" : "Chrome"}:</strong> na barra de endereço, do lado direito do ⭐, clique no ícone <strong>🖥️↓ "Instalar app"</strong>. Se não aparecer, abra o menu (⋮) e procure por <strong>"Instalar Caixa Breda"</strong> ou <strong>"Apps → Instalar este site como app"</strong>.<br><br>Se nada aparecer mesmo assim, use o app por aqui mesmo — funciona idêntico.`;
+      } else {
+        html = `<strong>Para instalar:</strong> use <strong>Chrome</strong> ou <strong>Edge</strong> (PC), <strong>Safari</strong> (iPhone/Mac) ou <strong>Chrome</strong> (Android). Cada um tem seu menu específico — basta procurar por "Instalar app" ou "Adicionar à tela inicial".`;
+      }
+      hintTxt.innerHTML = html;
     });
-
-    // Detecta Safari iOS (não tem beforeinstallprompt — mostra instruções)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    const isMacSafari = isSafari && /Mac/.test(navigator.userAgent);
-
-    if (isIOS) {
-      btn.style.display = "block";
-      btn.textContent = "📲 Instalar no iPhone/iPad";
-      btn.addEventListener("click", () => {
-        hint.style.display = "block";
-        hintTxt.innerHTML = `Toque no botão <strong>Compartilhar</strong> (□↑) na barra inferior do Safari, depois em <strong>Adicionar à Tela de Início</strong>.`;
-      });
-    } else if (isMacSafari) {
-      btn.style.display = "block";
-      btn.textContent = "📲 Instalar no Mac";
-      btn.addEventListener("click", () => {
-        hint.style.display = "block";
-        hintTxt.innerHTML = `No Safari (macOS), menu <strong>Arquivo → Adicionar à Dock</strong>. Pra mais opções, use Chrome ou Edge — eles instalam direto.`;
-      });
-    }
-    // Se nenhum dos casos disparou após 1.5s, mostra hint genérico
-    setTimeout(() => {
-      if (btn.style.display === "none") {
-        btn.style.display = "block";
-        btn.textContent = "📲 Como instalar como app?";
-        btn.addEventListener("click", () => {
-          hint.style.display = "block";
-          hintTxt.innerHTML = `Use o <strong>Chrome</strong> ou <strong>Edge</strong>: na barra de endereço aparece o ícone 🖥️↓ ("Instalar app"). Ou pelo menu (⋮) → "Instalar Caixa Breda".`;
-        });
-      }
-    }, 1500);
   }
 
   // ====== INIT ======
@@ -1041,7 +1046,30 @@
     carregarTudo();
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./assets/sw.js").catch(() => {});
+      navigator.serviceWorker.register("./assets/sw.js").then((reg) => {
+        // Detecta atualização do SW e oferece reload
+        if (reg.waiting) notificarAtualizacao();
+        reg.addEventListener("updatefound", () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener("statechange", () => {
+            if (sw.state === "installed" && navigator.serviceWorker.controller) {
+              notificarAtualizacao();
+            }
+          });
+        });
+      }).catch(() => {});
     }
   });
+
+  function notificarAtualizacao() {
+    const el = $("#toast");
+    el.innerHTML = `Nova versão disponível. <a href="#" id="link-recarregar" style="color:var(--gold); text-decoration:underline; margin-left:8px">Recarregar</a>`;
+    el.classList.remove("err");
+    el.classList.add("show");
+    setTimeout(() => {
+      const link = document.getElementById("link-recarregar");
+      if (link) link.addEventListener("click", (e) => { e.preventDefault(); location.reload(); });
+    }, 0);
+  }
 })();

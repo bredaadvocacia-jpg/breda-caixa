@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v4 */
-const CACHE = "caixa-breda-v4";
+/* Service Worker — Caixa Breda v7 */
+const CACHE = "caixa-breda-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,6 +24,29 @@ self.addEventListener("fetch", (ev) => {
   const url = new URL(ev.request.url);
   if (url.hostname.includes("script.google.com")) return;
   if (ev.request.method !== "GET") return;
+
+  // Network-first para HTML e JS principais — garante que mudanças apareçam rápido.
+  const isShell = ev.request.mode === "navigate"
+    || url.pathname.endsWith(".html")
+    || url.pathname.endsWith("/app.js")
+    || url.pathname.endsWith("/style.css");
+
+  if (isShell) {
+    ev.respondWith(
+      fetch(ev.request)
+        .then((res) => {
+          if (res.ok && url.origin === self.location.origin) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(ev.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(ev.request))
+    );
+    return;
+  }
+
+  // Demais assets: cache-first
   ev.respondWith(
     caches.match(ev.request).then((cached) => {
       if (cached) return cached;
