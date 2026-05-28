@@ -382,9 +382,20 @@
   }
 
   function renderInsights() {
-    const now = new Date();
-    const yAtual = now.getFullYear();
-    const mAtual = now.getMonth() + 1;
+    // Pega o último mês com dados reais — se o mês corrente está vazio, exibe o anterior.
+    const todosMeses = state.entradas.concat(state.saidas)
+      .filter(x => x.ano && x.mes && x.categoria !== "Saldo Mês Anterior")
+      .map(x => x.ano * 100 + x.mes);
+    let yAtual, mAtual;
+    if (todosMeses.length > 0) {
+      const maxYM = Math.max.apply(null, todosMeses);
+      yAtual = Math.floor(maxYM / 100);
+      mAtual = maxYM % 100;
+    } else {
+      const now = new Date();
+      yAtual = now.getFullYear();
+      mAtual = now.getMonth() + 1;
+    }
     const mAnt = mAtual === 1 ? 12 : mAtual - 1;
     const yAnt = mAtual === 1 ? yAtual - 1 : yAtual;
 
@@ -398,7 +409,12 @@
     const saldoMes = recMes - desMes;
     const margem = recMes > 0 ? (saldoMes / recMes) * 100 : 0;
 
-    $("#periodo-atual").textContent = `${MESES_PT[mAtual-1]} ${yAtual}`;
+    // Indica se está mostrando o mês mais recente (não o calendário atual)
+    const now = new Date();
+    const calendarioYM = now.getFullYear() * 100 + (now.getMonth() + 1);
+    const dataYM = yAtual * 100 + mAtual;
+    const sufixo = dataYM < calendarioYM ? " · último mês com lançamentos" : "";
+    $("#periodo-atual").textContent = `${MESES_PT[mAtual-1]} ${yAtual}${sufixo}`;
     $("#stat-receita-mes").textContent = fmtBRL(recMes);
     $("#stat-despesa-mes").textContent = fmtBRL(desMes);
     $("#stat-saldo-mes").textContent = fmtBRL(saldoMes);
