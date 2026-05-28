@@ -224,7 +224,8 @@
     if (!state.apiUrl || !state.token) return;
     // Resumo
     apiGet({ aba: "ia", acao: "resumo" }).then(r => {
-      $("#resumo-ia").textContent = r.texto || "(sem resposta)";
+      const texto = r.texto || "(sem resposta)";
+      $("#resumo-ia").innerHTML = formatarResumo(texto);
     }).catch(err => {
       $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}</span>`;
     });
@@ -238,7 +239,7 @@
         wrap.innerHTML = `<div class="alert empty"><span class="alert-icon">✓</span><span>Nenhuma anomalia relevante detectada nos últimos meses.</span></div>`;
         meta.textContent = "0 alertas";
       } else {
-        wrap.innerHTML = list.map(a => `<div class="alert"><span class="alert-icon">!</span><span>${escapeHtml(a)}</span></div>`).join("");
+        wrap.innerHTML = list.map(a => renderAlerta(a)).join("");
         meta.textContent = list.length + " alerta" + (list.length === 1 ? "" : "s");
       }
     }).catch(err => {
@@ -247,6 +248,76 @@
     });
 
     // Previsão (só dispara quando entrar na tab Análise)
+  }
+
+  // ====== FORMATADORES DE SAÍDA IA ======
+  const ALERTA_LABELS = {
+    GASTO_ACIMA:      { label: "Gasto acima da média",      tom: "neg",  emoji: "↑" },
+    RECEITA_AUSENTE:  { label: "Receita recorrente faltando", tom: "warn", emoji: "—" },
+    GASTO_NOVO:       { label: "Gasto novo atípico",         tom: "warn", emoji: "+" },
+    QUEDA_RECEITA:    { label: "Queda de receita",           tom: "neg",  emoji: "↓" },
+    ALERTA:           { label: "Alerta",                     tom: "warn", emoji: "!" },
+  };
+
+  function mesPt(ym) {
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || "";
+    const [y, m] = ym.split("-");
+    return `${MESES_PT[parseInt(m,10)-1]} ${y}`;
+  }
+
+  function renderAlerta(a) {
+    // Suporta formato JSON novo {tipo, mes, valor, categoria, comparativo, descricao}
+    // ou string crua antiga (fallback do backend)
+    if (typeof a === "string") {
+      // tenta parsear "TIPO: descrição (valor)"
+      const m = a.match(/^([A-Z_]+):\s*(.+?)(?:\s*\(([\d.]+)\))?$/);
+      if (m) a = { tipo: m[1], descricao: m[2], valor: m[3] ? parseFloat(m[3]) : null };
+      else a = { tipo: "ALERTA", descricao: a };
+    }
+    const meta = ALERTA_LABELS[a.tipo] || ALERTA_LABELS.ALERTA;
+    const mes = a.mes ? mesPt(a.mes) : "";
+    const cat = a.categoria ? ` · <span class="alert-cat">${escapeHtml(a.categoria)}</span>` : "";
+    const valor = (a.valor || a.valor === 0) ? `<span class="alert-valor ${meta.tom}">${fmtBRL(a.valor)}</span>` : "";
+    const comp = (a.comparativo || a.comparativo === 0)
+      ? `<span class="alert-comp">vs ${fmtBRL(a.comparativo)}</span>` : "";
+    const desc = escapeHtml(a.descricao || "");
+
+    return `
+      <div class="alert alert-${meta.tom}">
+        <span class="alert-tag alert-tag-${meta.tom}">${meta.emoji} ${meta.label}</span>
+        <div class="alert-body">
+          <div class="alert-desc">${desc}${cat}</div>
+          <div class="alert-numbers">
+            ${mes ? `<span class="alert-mes">${escapeHtml(mes)}</span>` : ""}
+            ${valor}
+            ${comp}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /** Pega o texto cru do resumo e melhora formatação:
+   *  - converte YYYY-MM em "Mês YYYY"
+   *  - destaca valores em R$
+   *  - quebra parágrafos por linha em branco
+   *  - escapa HTML antes de aplicar transformações
+   */
+  function formatarResumo(txt) {
+    let t = escapeHtml(txt);
+    // YYYY-MM → Mês YYYY
+    t = t.replace(/(\d{4})-(\d{2})/g, (_, y, m) => {
+      const idx = parseInt(m, 10) - 1;
+      if (idx < 0 || idx > 11) return `${y}-${m}`;
+      return `${MESES_PT[idx]} ${y}`;
+    });
+    // Valores soltos "R$ X.XXX,XX" e "X.XXX,XX" — destacar em bold
+    t = t.replace(/(R\$\s?[\d.]+,\d{2})/g, '<strong class="resumo-num">$1</strong>');
+    // Percentuais
+    t = t.replace(/([+-]?\d+[,.]\d+%)/g, '<strong class="resumo-pct">$1</strong>');
+    // Quebras de parágrafo
+    const paragrafos = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    return paragrafos.map(p => `<p>${p.replace(/\n/g, " ")}</p>`).join("");
   }
 
   async function carregarPrevisao() {
