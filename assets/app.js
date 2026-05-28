@@ -796,6 +796,66 @@
     } catch (err) { toast(err.message, true); }
   }
 
+  // ====== REVISAR ANOMALIAS ======
+  let _anomalias = [];
+
+  async function abrirAnomalias() {
+    fecharDrawer();
+    $("#anomalias-modal").classList.add("open");
+    $("#anomalias-status").textContent = "Carregando lançamentos anômalos…";
+    $("#anomalias-tabela-wrap").style.display = "none";
+    $("#anomalias-vazio").style.display = "none";
+    try {
+      const r = await apiPost("anomalias-revisar");
+      _anomalias = r.anomalias || [];
+      $("#anomalias-status").style.display = "none";
+      if (_anomalias.length === 0) {
+        $("#anomalias-vazio").style.display = "block";
+        return;
+      }
+      $("#anomalias-tabela-wrap").style.display = "block";
+      renderTabelaAnomalias();
+    } catch (err) {
+      $("#anomalias-status").innerHTML = `<span style="color:var(--neg)">Erro: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  function renderTabelaAnomalias() {
+    const tbody = $("#anomalias-tabela-body");
+    tbody.innerHTML = _anomalias.map((a, i) => `
+      <tr>
+        <td><input type="checkbox" class="anom-check" data-i="${i}" checked /></td>
+        <td class="col-data">${fmtData(a.data)}</td>
+        <td class="col-desc" style="max-width:200px; font-size:12px">${escapeHtml(a.descricao)}</td>
+        <td><span class="pill">${escapeHtml(a.categoria || "—")}</span></td>
+        <td class="col-valor neg" style="font-size:12px">${fmtBRL(a.valorAtual)}</td>
+        <td class="col-valor pos" style="font-size:13px">${fmtBRL(a.valorSugerido)}</td>
+        <td style="text-align:center; font-size:11px; color:var(--ink-3); font-family:monospace">${escapeHtml(a.fator || "—")}</td>
+      </tr>
+    `).join("");
+    $("#anom-todos").addEventListener("change", e => {
+      $$(".anom-check").forEach(c => c.checked = e.target.checked);
+    });
+  }
+
+  function fecharAnomalias() { $("#anomalias-modal").classList.remove("open"); }
+
+  async function aplicarAnomalias() {
+    const itens = [];
+    $$(".anom-check:checked").forEach(c => {
+      const a = _anomalias[parseInt(c.dataset.i, 10)];
+      if (a) itens.push({ id: a.id, _tipo: a._tipo, novoValor: a.valorSugerido });
+    });
+    if (itens.length === 0) { toast("Nenhum lançamento marcado.", true); return; }
+    if (!confirm(`Aplicar ${itens.length} correção(ões)? Os valores serão atualizados na planilha.`)) return;
+    try {
+      const r = await apiPost("anomalias-corrigir", { itens });
+      toast(`${r.corrigidas} lançamento(s) corrigido(s).`);
+      fecharAnomalias();
+      carregarTudo();
+    } catch (err) { toast(err.message, true); }
+  }
+
   // ====== EXPORT ======
   function exportarCSV() {
     const arr = dadosFiltrados();
@@ -873,6 +933,15 @@
 
     // Sessões
     $("#btn-revogar-outras").addEventListener("click", revogarOutras);
+
+    // Revisar anomalias
+    $("#btn-revisar-anomalias").addEventListener("click", abrirAnomalias);
+    $("#btn-fechar-anomalias").addEventListener("click", fecharAnomalias);
+    $("#btn-cancelar-anomalias").addEventListener("click", fecharAnomalias);
+    $("#btn-aplicar-anomalias").addEventListener("click", aplicarAnomalias);
+    $("#btn-anom-sel-todos").addEventListener("click", () => { $$(".anom-check").forEach(c => c.checked = true); $("#anom-todos").checked = true; });
+    $("#btn-anom-desel-todos").addEventListener("click", () => { $$(".anom-check").forEach(c => c.checked = false); $("#anom-todos").checked = false; });
+    $("#anomalias-modal").addEventListener("click", e => { if (e.target.id === "anomalias-modal") fecharAnomalias(); });
 
     // Tab inicial via hash
     window.addEventListener("hashchange", () => {
