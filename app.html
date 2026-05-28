@@ -43,27 +43,50 @@
 <div data-tab-content="insights">
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Visão geral</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Visão geral</div>
+        <div class="section-sub">desempenho do mês atual</div>
+      </div>
       <div class="section-meta" id="periodo-atual">—</div>
     </div>
     <div class="stats">
       <div class="stat">
-        <div class="stat-label">Receita do mês</div>
+        <div class="stat-head">
+          <div class="stat-label">Receita</div>
+          <div class="stat-icon pos">
+            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 14l5-5 5 5M12 19V9"/></svg>
+          </div>
+        </div>
         <div class="stat-value pos" id="stat-receita-mes">—</div>
         <div class="stat-sub" id="stat-receita-sub">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Despesa do mês</div>
+        <div class="stat-head">
+          <div class="stat-label">Despesa</div>
+          <div class="stat-icon neg">
+            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 10l5 5 5-5M12 5v10"/></svg>
+          </div>
+        </div>
         <div class="stat-value neg" id="stat-despesa-mes">—</div>
         <div class="stat-sub" id="stat-despesa-sub">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Saldo</div>
+        <div class="stat-head">
+          <div class="stat-label">Saldo</div>
+          <div class="stat-icon neutral">
+            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 12h18M12 3v18"/></svg>
+          </div>
+        </div>
         <div class="stat-value" id="stat-saldo-mes">—</div>
         <div class="stat-sub" id="stat-saldo-sub">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Margem</div>
+        <div class="stat-head">
+          <div class="stat-label">Margem</div>
+          <div class="stat-icon neutral">
+            <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+        </div>
         <div class="stat-value" id="stat-margem">—</div>
         <div class="stat-sub">resultado / receita</div>
       </div>
@@ -72,29 +95,39 @@
 
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Alertas detectados pela IA</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Alertas inteligentes</div>
+        <div class="section-sub">anomalias detectadas automaticamente</div>
+      </div>
       <div class="section-meta" id="alertas-meta">—</div>
     </div>
     <div id="alertas" class="alerts">
-      <div class="alert"><span class="alert-icon">⏳</span><span>Carregando…</span></div>
+      <div class="alert"><span class="alert-icon">…</span><span>Carregando…</span></div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Resumo executivo</div>
-      <div class="section-meta">gerado por IA</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Resumo executivo</div>
+        <div class="section-sub">análise do mês mais recente</div>
+      </div>
     </div>
     <div class="ai-block">
-      <div class="ai-tag">Análise do mês</div>
+      <div class="ai-head">
+        <div class="ai-badge">IA</div>
+        <div class="ai-title">Síntese do mês</div>
+      </div>
       <div class="ai-text" id="resumo-ia"><span class="ai-loading">Analisando dados…</span></div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Pergunte ao seu caixa</div>
-      <div class="section-meta">conversa em linguagem natural</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Pergunte ao seu caixa</div>
+        <div class="section-sub">conversa em linguagem natural com os dados</div>
+      </div>
     </div>
     <div class="chat-box">
       <div class="chat-log" id="chat-log"></div>
@@ -109,6 +142,13 @@
 <!-- ─────── TAB: MOVIMENTAÇÕES ─────── -->
 <div data-tab-content="movimentacoes" hidden>
   <div class="section">
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Lançamentos</div>
+        <div class="section-sub">filtre, busque e edite cada registro</div>
+      </div>
+      <div class="section-meta" id="tabela-meta">—</div>
+    </div>
     <div class="filters">
       <div class="chips">
         <button class="chip tipo-entrada active" data-tipo="entrada">Entradas</button>
@@ -159,7 +199,6 @@
         </table>
       </div>
     </div>
-    <div class="section-meta" id="tabela-meta" style="text-align:right; margin-top:12px">—</div>
   </div>
 </div>
 
@@ -167,30 +206,48 @@
 <div data-tab-content="analise" hidden>
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Ano de análise</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Ano de análise</div>
+        <div class="section-sub">selecione para filtrar gráficos e resumo</div>
+      </div>
     </div>
-    <select id="ano-analise" class="input" style="max-width:160px"></select>
+    <select id="ano-analise" class="input" style="max-width:180px"></select>
   </div>
 
   <div class="section">
-    <div class="section-head"><div class="section-title">Receitas × Despesas (12 meses)</div></div>
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Receitas × Despesas</div>
+        <div class="section-sub">comparativo mensal do ano selecionado</div>
+      </div>
+    </div>
     <div class="card"><canvas id="chart-rxd" style="max-height:280px"></canvas></div>
   </div>
 
   <div class="section">
-    <div class="section-head"><div class="section-title">Saldo acumulado</div></div>
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Saldo acumulado</div>
+        <div class="section-sub">evolução do resultado mês a mês</div>
+      </div>
+    </div>
     <div class="card"><canvas id="chart-saldo" style="max-height:220px"></canvas></div>
   </div>
 
   <div class="section">
-    <div class="section-head"><div class="section-title">Composição</div></div>
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Composição</div>
+        <div class="section-sub">categorias com maior volume</div>
+      </div>
+    </div>
     <div class="charts-grid">
       <div class="chart-card">
-        <div class="card-head"><div class="card-title">Top despesas</div></div>
+        <h3>Top despesas</h3>
         <canvas id="chart-top-saidas" style="max-height:300px"></canvas>
       </div>
       <div class="chart-card">
-        <div class="card-head"><div class="card-title">Top receitas</div></div>
+        <h3>Top receitas</h3>
         <canvas id="chart-top-entradas" style="max-height:300px"></canvas>
       </div>
     </div>
@@ -198,8 +255,10 @@
 
   <div class="section">
     <div class="section-head">
-      <div class="section-title">Previsão · próximos 3 meses</div>
-      <div class="section-meta">gerada por IA</div>
+      <div class="section-title-wrap">
+        <div class="section-title">Previsão · próximos 3 meses</div>
+        <div class="section-sub">projeção gerada por IA com base em sazonalidade</div>
+      </div>
     </div>
     <div class="forecast-grid" id="forecast-grid">
       <div class="forecast-month">
@@ -209,7 +268,12 @@
   </div>
 
   <div class="section">
-    <div class="section-head"><div class="section-title">Resumo mensal</div></div>
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Resumo mensal</div>
+        <div class="section-sub">consolidação do ano selecionado</div>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <div class="tbl-scroll">
         <table>
