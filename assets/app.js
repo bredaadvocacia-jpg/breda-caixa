@@ -312,10 +312,12 @@
       if (idx < 0 || idx > 11) return `${y}-${m}`;
       return `${MESES_PT[idx]} ${y}`;
     });
-    // Valores R$ X.XXX,XX em destaque
-    t = t.replace(/(R\$\s?[\d.]+,\d{2})/g, '<strong class="resumo-num">$1</strong>');
-    // Percentuais
-    t = t.replace(/([+-]?\d+[,.]\d+%)/g, '<strong class="resumo-pct">$1</strong>');
+    // Valores em R$: aceita formatos BR — R$ 100, R$ 1.234, R$ 1.234,56, R$ 5.969.283,02
+    // e também saídas mal-formatadas onde a IA esqueceu o decimal (R$ 202,801).
+    t = t.replace(/(R\$\s?\d{1,3}(?:[.,]\d{3})*(?:,\d{1,2})?)/g,
+      '<strong class="resumo-num">$1</strong>');
+    // Percentuais (até 2 casas)
+    t = t.replace(/([+-]?\d+(?:[,.]\d{1,2})?%)/g, '<strong class="resumo-pct">$1</strong>');
     // Normalizar 3+ quebras em 2 (pra não criar parágrafos vazios)
     t = t.replace(/\n{3,}/g, "\n\n");
     // Dividir em blocos por linha em branco
