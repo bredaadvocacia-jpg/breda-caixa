@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v10 (logo manifesto Playfair) */
-const CACHE = "caixa-breda-v10";
+/* Service Worker — Caixa Breda v11 (fix manifest absoluto) */
+const CACHE = "caixa-breda-v11";
 const ASSETS = [
   "./",
   "./index.html",
