@@ -1208,6 +1208,55 @@ td.col-valor.neg { color: var(--neg); }
   .login-card { padding: 36px 28px; }
 }
 
+/* ============ RADIO CARDS (modal relatório) ============ */
+.radio-card {
+  flex: 1;
+  cursor: pointer;
+  display: block;
+  position: relative;
+}
+.radio-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.radio-card-body {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  transition: all .15s ease;
+  height: 100%;
+}
+.radio-card:hover .radio-card-body {
+  border-color: var(--accent-3);
+  background: var(--accent-bg);
+}
+.radio-card input[type="radio"]:checked + .radio-card-body {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 0 3px rgba(124, 94, 30, 0.12);
+}
+.radio-card-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.radio-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+.radio-card-desc {
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
 /* ============ PRINT ============ */
 @media print {
   .topbar, .fab, .filters, .chips, .modal-backdrop, .drawer, .drawer-backdrop, .chat-input-row { display: none !important; }

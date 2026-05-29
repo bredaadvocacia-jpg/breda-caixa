@@ -966,10 +966,59 @@
     } catch (err) { toast(err.message, true); }
   }
 
-  // ====== EXPORT ======
-  function exportarCSV() {
+  // ====== EXPORT / RELATÓRIO ======
+  function abrirModalRelatorio() {
     const arr = dadosFiltrados();
-    if (!arr.length) { toast("Nada para exportar.", true); return; }
+    if (!arr.length) { toast("Nenhum lançamento nos filtros atuais.", true); return; }
+
+    const partes = [];
+    if (state.filtroBusca) partes.push(`busca: "${state.filtroBusca}"`);
+    if (state.filtroCategoria) partes.push(`categoria: ${state.filtroCategoria}`);
+    if (state.filtroAno) partes.push(`ano: ${state.filtroAno}`);
+    if (state.filtroMes) partes.push(`mês: ${MESES_PT[state.filtroMes - 1]}`);
+    if (state.filtroDataDe || state.filtroDataAte) partes.push(`período: ${state.filtroDataDe || "início"} → ${state.filtroDataAte || "hoje"}`);
+    const tipos = [];
+    if (state.filtroTipos.entrada) tipos.push("entradas");
+    if (state.filtroTipos.saida) tipos.push("saídas");
+    partes.push(`tipos: ${tipos.join(" + ") || "—"}`);
+
+    const totRec = arr.filter(x => x._t === "entrada").reduce((s,x) => s + (x.valor || 0), 0);
+    const totDes = arr.filter(x => x._t === "saida").reduce((s,x) => s + (x.valor || 0), 0);
+
+    $("#relatorio-resumo").innerHTML =
+      `<strong>${arr.length}</strong> lançamento(s) serão incluídos.<br>` +
+      `Filtros: <em>${partes.join(" · ") || "nenhum (todo o histórico)"}</em><br>` +
+      `Totais: <span class="pos" style="font-weight:600">${fmtBRL(totRec)}</span> em entradas · ` +
+      `<span class="neg" style="font-weight:600">${fmtBRL(totDes)}</span> em saídas`;
+
+    if (state.filtroBusca) {
+      $("#relatorio-titulo").value = `Movimentações ${state.filtroBusca.toUpperCase()} — Histórico filtrado`;
+    } else if (state.filtroCategoria) {
+      $("#relatorio-titulo").value = `Movimentações — ${state.filtroCategoria}`;
+    } else {
+      $("#relatorio-titulo").value = "Movimentações do escritório";
+    }
+
+    const datas = arr.map(x => x.data).filter(Boolean).sort();
+    $("#relatorio-subtitulo").value = datas.length ? `${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}` : "";
+
+    $("#relatorio-modal").classList.add("open");
+  }
+
+  function fecharModalRelatorio() { $("#relatorio-modal").classList.remove("open"); }
+
+  function gerarRelatorio() {
+    const formato = (document.querySelector('input[name="formato"]:checked') || {}).value || "pdf";
+    const titulo = $("#relatorio-titulo").value.trim() || "Relatório de Movimentações";
+    const subtitulo = $("#relatorio-subtitulo").value.trim();
+    const incluirTotais = $("#relatorio-incluir-totais").checked;
+    if (formato === "csv") exportarCSV(titulo);
+    else exportarPDF({ titulo, subtitulo, incluirTotais });
+    fecharModalRelatorio();
+  }
+
+  function exportarCSV(titulo) {
+    const arr = dadosFiltrados();
     const cols = ["data","_t","descricao","valor","categoria","ano","mes"];
     const head = ["data","tipo","descricao","valor","categoria","ano","mes"].join(";");
     const rows = arr.map(x => cols.map(c => {
@@ -979,8 +1028,238 @@
     const blob = new Blob(["﻿" + head + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `caixa-breda-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = nomeArquivo(titulo || "caixa-breda", "csv");
     a.click(); URL.revokeObjectURL(a.href);
+    toast("CSV exportado.");
+  }
+
+  function nomeArquivo(titulo, ext) {
+    const slug = (titulo || "relatorio")
+      .toLowerCase()
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      .slice(0, 60);
+    return `${slug}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+  }
+
+  function exportarPDF(opts) {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      toast("Biblioteca PDF não carregou. Recarregue a página.", true);
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const arr = dadosFiltrados().slice().sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+
+    desenharCabecalho(doc, W);
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(31, 30, 24);
+    doc.text(opts.titulo || "Relatório de Movimentações", W / 2, 56, { align: "center" });
+
+    if (opts.subtitulo) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(107, 102, 90);
+      doc.text(opts.subtitulo, W / 2, 63, { align: "center" });
+    }
+
+    doc.setDrawColor(124, 94, 30);
+    doc.setLineWidth(0.4);
+    doc.line(W / 2 - 25, 67, W / 2 + 25, 67);
+
+    const totRec = arr.filter(x => x._t === "entrada").reduce((s, x) => s + (x.valor || 0), 0);
+    const totDes = arr.filter(x => x._t === "saida").reduce((s, x) => s + (x.valor || 0), 0);
+    const saldo = totRec - totDes;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 80);
+    const gerado = new Date().toLocaleString("pt-BR");
+    doc.text(`Gerado em ${gerado}  ·  ${arr.length} lançamento(s)`, W / 2, 74, { align: "center" });
+
+    const filtros = [];
+    if (state.filtroBusca) filtros.push(`busca: "${state.filtroBusca}"`);
+    if (state.filtroCategoria) filtros.push(`categoria: ${state.filtroCategoria}`);
+    if (state.filtroAno) filtros.push(`ano: ${state.filtroAno}`);
+    if (state.filtroMes) filtros.push(`mês: ${MESES_PT[state.filtroMes - 1]}`);
+    if (state.filtroDataDe || state.filtroDataAte) filtros.push(`período: ${state.filtroDataDe || "início"} → ${state.filtroDataAte || "hoje"}`);
+    if (filtros.length) {
+      doc.setFontSize(8);
+      doc.setTextColor(120, 115, 105);
+      doc.text(`Filtros: ${filtros.join("  ·  ")}`, W / 2, 79, { align: "center" });
+    }
+
+    const body = arr.map(x => [
+      fmtData(x.data),
+      x._t === "entrada" ? "E" : "S",
+      (x.descricao || "").slice(0, 70),
+      x.categoria || "—",
+      { content: fmtBRL(x.valor || 0), styles: { halign: "right", textColor: x._t === "entrada" ? [45, 111, 68] : [150, 58, 61] } }
+    ]);
+
+    doc.autoTable({
+      startY: 86,
+      head: [["Data", "T", "Descrição", "Categoria", "Valor (R$)"]],
+      body: body,
+      theme: "plain",
+      styles: {
+        font: "helvetica", fontSize: 8.5,
+        cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 },
+        textColor: [42, 41, 32], lineColor: [230, 226, 215], lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [124, 94, 30], textColor: [248, 243, 227],
+        fontStyle: "bold", fontSize: 8,
+        cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+      },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 8, halign: "center", fontStyle: "bold" },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 38 },
+        4: { cellWidth: 30, halign: "right" },
+      },
+      alternateRowStyles: { fillColor: [251, 249, 243] },
+      margin: { left: 15, right: 15 },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) desenharCabecaloCompacto(doc, W);
+        const pg = doc.getCurrentPageInfo().pageNumber;
+        const total = doc.getNumberOfPages();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(155, 149, 138);
+        doc.text(`Breda Advocacia · Sociedade de Advogados`, 15, H - 8);
+        doc.text(`Página ${pg} de ${total}`, W - 15, H - 8, { align: "right" });
+      },
+    });
+
+    if (opts.incluirTotais) {
+      let y = doc.lastAutoTable.finalY + 10;
+      if (y > H - 80) { doc.addPage(); desenharCabecaloCompacto(doc, W); y = 40; }
+
+      doc.setDrawColor(230, 226, 215);
+      doc.setFillColor(251, 249, 243);
+      doc.roundedRect(15, y, W - 30, 28, 2, 2, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(107, 102, 90);
+      doc.text("RESUMO DO PERÍODO", 20, y + 7);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(45, 111, 68);
+      doc.text("Total de entradas", 20, y + 16);
+      doc.setFont("helvetica", "bold");
+      doc.text(fmtBRL(totRec), W - 20, y + 16, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(150, 58, 61);
+      doc.text("Total de saídas", 20, y + 22);
+      doc.setFont("helvetica", "bold");
+      doc.text(fmtBRL(totDes), W - 20, y + 22, { align: "right" });
+
+      doc.setDrawColor(124, 94, 30);
+      doc.setLineWidth(0.3);
+      doc.line(W - 80, y + 24.5, W - 20, y + 24.5);
+
+      y += 32;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(31, 30, 24);
+      doc.text("SALDO", 20, y);
+      const cor = saldo >= 0 ? [45, 111, 68] : [150, 58, 61];
+      doc.setTextColor(cor[0], cor[1], cor[2]);
+      doc.setFontSize(13);
+      doc.text(fmtBRL(saldo), W - 20, y, { align: "right" });
+
+      y += 12;
+
+      const porCat = {};
+      arr.forEach(x => {
+        const k = `${x._t}|${x.categoria || "—"}`;
+        porCat[k] = (porCat[k] || 0) + (x.valor || 0);
+      });
+      const linhasCat = Object.entries(porCat)
+        .map(([k, v]) => {
+          const [tipo, cat] = k.split("|");
+          return [tipo === "entrada" ? "Entrada" : "Saída", cat, fmtBRL(v)];
+        })
+        .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+
+      if (linhasCat.length > 0 && y < H - 50) {
+        doc.autoTable({
+          startY: y,
+          head: [["Tipo", "Categoria", "Total"]],
+          body: linhasCat,
+          theme: "plain",
+          styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2, textColor: [42, 41, 32], lineColor: [240, 235, 222], lineWidth: 0.1 },
+          headStyles: { fillColor: [248, 243, 227], textColor: [107, 102, 90], fontStyle: "bold", fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: "auto" },
+            2: { cellWidth: 35, halign: "right", fontStyle: "bold" },
+          },
+          margin: { left: 15, right: 15 },
+        });
+      }
+    }
+
+    doc.save(nomeArquivo(opts.titulo, "pdf"));
+    toast("PDF gerado.");
+  }
+
+  function desenharCabecalho(doc, W) {
+    desenharMark(doc, W / 2 - 9, 12, 18);
+    doc.setFont("times", "bold");
+    doc.setFontSize(28);
+    doc.setTextColor(31, 30, 24);
+    doc.text("BREDA", W / 2, 40, { align: "center", charSpace: 1.5 });
+    doc.setDrawColor(124, 94, 30);
+    doc.setLineWidth(0.4);
+    doc.line(W / 2 - 15, 43, W / 2 + 15, 43);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(107, 102, 90);
+    doc.text("SOCIEDADE DE ADVOGADOS", W / 2, 47, { align: "center", charSpace: 1.2 });
+  }
+
+  function desenharCabecaloCompacto(doc, W) {
+    desenharMark(doc, 15, 10, 12);
+    doc.setFont("times", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(31, 30, 24);
+    doc.text("BREDA", 31, 18, { charSpace: 1 });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(107, 102, 90);
+    doc.text("SOCIEDADE DE ADVOGADOS", 31, 22, { charSpace: 0.8 });
+    doc.setDrawColor(230, 226, 215);
+    doc.setLineWidth(0.2);
+    doc.line(15, 28, W - 15, 28);
+  }
+
+  function desenharMark(doc, x, y, size) {
+    doc.setFillColor(124, 94, 30);
+    doc.roundedRect(x, y, size, size, 0.6, 0.6, "F");
+    doc.setFillColor(248, 243, 227);
+    const s = size / 20;
+    doc.rect(x + 4*s, y + 5*s, 12*s, 0.8*s, "F");
+    doc.rect(x + 4.5*s, y + 6*s, 1*s, 7*s, "F");
+    doc.rect(x + 7*s, y + 6*s, 1*s, 7*s, "F");
+    doc.rect(x + 9.5*s, y + 6*s, 1*s, 7*s, "F");
+    doc.rect(x + 4*s, y + 13*s, 6.5*s, 0.8*s, "F");
+    doc.rect(x + 12*s, y + 6*s, 1.2*s, 8*s, "F");
+    doc.circle(x + 14.5*s, y + 8*s, 1.8*s, "F");
+    doc.circle(x + 14.5*s, y + 12*s, 2*s, "F");
+    doc.setFillColor(124, 94, 30);
+    doc.circle(x + 14.5*s, y + 8*s, 0.8*s, "F");
+    doc.circle(x + 14.5*s, y + 12*s, 0.9*s, "F");
   }
 
   // ====== PWA INSTALL ======
@@ -1076,7 +1355,11 @@
       $("#filtro-data-de").value=""; $("#filtro-data-ate").value="";
       renderMovimentacoes();
     });
-    $("#btn-exportar").addEventListener("click", exportarCSV);
+    $("#btn-relatorio").addEventListener("click", abrirModalRelatorio);
+    $("#btn-fechar-relatorio").addEventListener("click", fecharModalRelatorio);
+    $("#btn-cancelar-relatorio").addEventListener("click", fecharModalRelatorio);
+    $("#btn-baixar-relatorio").addEventListener("click", gerarRelatorio);
+    $("#relatorio-modal").addEventListener("click", e => { if (e.target.id === "relatorio-modal") fecharModalRelatorio(); });
 
     // Período (range de datas)
     $("#filtro-data-de").addEventListener("change", e => { state.filtroDataDe = e.target.value; renderMovimentacoes(); });

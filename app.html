@@ -174,7 +174,7 @@
       </div>
       <div class="field-inline">
         <label>&nbsp;</label>
-        <button class="btn btn-ghost" id="btn-exportar">Exportar CSV</button>
+        <button class="btn btn-primary" id="btn-relatorio">📄 Gerar relatório</button>
       </div>
     </div>
     <div class="filters" style="margin-top:-8px">
@@ -581,9 +581,71 @@
   </div>
 </div>
 
+<!-- MODAL GERAR RELATÓRIO -->
+<div class="modal-backdrop" id="relatorio-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <h2>Gerar relatório</h2>
+      <button class="close-btn" id="btn-fechar-relatorio">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="relatorio-resumo" style="font-size:13px; color:var(--ink-3); margin-bottom:18px; padding:12px 14px; background:var(--surface-2); border-radius:8px; line-height:1.6"></div>
+
+      <div class="field">
+        <label>Título do relatório</label>
+        <input id="relatorio-titulo" type="text" placeholder="ex: Movimentações Replantar — Histórico Completo" />
+      </div>
+
+      <div class="field">
+        <label>Subtítulo / Período (opcional)</label>
+        <input id="relatorio-subtitulo" type="text" placeholder="ex: Janeiro/2024 a Maio/2026" />
+      </div>
+
+      <div class="field">
+        <label style="margin-bottom:8px">Formato</label>
+        <div style="display:flex; gap:8px">
+          <label class="radio-card">
+            <input type="radio" name="formato" value="pdf" checked />
+            <div class="radio-card-body">
+              <div class="radio-card-icon">📄</div>
+              <div>
+                <div class="radio-card-title">PDF</div>
+                <div class="radio-card-desc">Cabeçalho Breda, tabela formatada, totais. Pronto pra imprimir ou enviar.</div>
+              </div>
+            </div>
+          </label>
+          <label class="radio-card">
+            <input type="radio" name="formato" value="csv" />
+            <div class="radio-card-body">
+              <div class="radio-card-icon">🗒</div>
+              <div>
+                <div class="radio-card-title">CSV</div>
+                <div class="radio-card-desc">Tabela bruta pra abrir no Excel/Sheets.</div>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:0">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px">
+          <input type="checkbox" id="relatorio-incluir-totais" checked />
+          <span>Incluir totais por categoria e resumo no fim do PDF</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="btn-cancelar-relatorio">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="btn-baixar-relatorio">Baixar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.0/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="./assets/app.js"></script>
 </body>
 </html>

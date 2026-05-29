@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v11 (fix manifest absoluto) */
-const CACHE = "caixa-breda-v11";
+/* Service Worker — Caixa Breda v12 (gerador de relatório PDF) */
+const CACHE = "caixa-breda-v12";
 const ASSETS = [
   "./",
   "./index.html",
