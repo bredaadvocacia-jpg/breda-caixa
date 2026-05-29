@@ -6,6 +6,46 @@
   const LS_TOK = "caixaBredaToken";
   const LS_CACHE = "caixaBredaCache";
 
+  /**
+   * Salva o cache no localStorage com fallback gradual: tenta TUDO; se estourar
+   * a quota (~5MB no Chrome), vai cortando lançamentos antigos até caber.
+   * Histórico fica disponível via API quando o usuário filtrar/relatar.
+   *
+   * Níveis: completo → últimos 24 meses → 12 meses → 6 meses → desliga cache.
+   */
+  function salvarCacheSeguro(entradas, saidas) {
+    const niveis = [null, 24, 12, 6];  // null = sem corte (tenta tudo)
+    const agora = new Date();
+    for (let i = 0; i < niveis.length; i++) {
+      const meses = niveis[i];
+      let e = entradas, s = saidas;
+      if (meses != null) {
+        const corte = agora.getFullYear() * 12 + (agora.getMonth() + 1) - meses;
+        const dentroDoCorte = (x) => x.ano && x.mes && (x.ano * 12 + x.mes) >= corte;
+        e = entradas.filter(dentroDoCorte);
+        s = saidas.filter(dentroDoCorte);
+      }
+      const payload = {
+        ts: Date.now(),
+        e, s,
+        cacheParcial: meses != null,
+        mesesCache: meses,
+      };
+      try {
+        localStorage.setItem(LS_CACHE, JSON.stringify(payload));
+        return { ok: true, parcial: meses != null, meses };
+      } catch (err) {
+        // quota excedida — tenta corte mais agressivo
+        if (err && /quota|exceed/i.test(err.message || err.name)) continue;
+        // outro erro — desiste silenciosamente
+        return { ok: false, erro: err.message };
+      }
+    }
+    // Não coube nem com 6 meses — limpa cache antigo e segue sem cache
+    try { localStorage.removeItem(LS_CACHE); } catch (e) {}
+    return { ok: false, erro: "quota excedida em todos os níveis" };
+  }
+
   const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
   const state = {
@@ -201,7 +241,7 @@
       const r = await apiGet({ aba: "painel" });
       state.entradas = r.entradas || [];
       state.saidas = r.saidas || [];
-      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
+      salvarCacheSeguro(state.entradas, state.saidas);
     } catch (err) {
       if (/senha|inválid|token|login/i.test(err.message)) { abrirLogin(err.message); return; }
       const c = localStorage.getItem(LS_CACHE);
@@ -805,7 +845,7 @@
         toast("Lançamento criado.");
       }
       fecharModal();
-      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
+      salvarCacheSeguro(state.entradas, state.saidas);
       popularFiltros();
       renderTodasAbas();
     } catch (err) { toast(err.message, true); }
@@ -823,7 +863,7 @@
       else state.saidas = state.saidas.filter(x => x.id !== id);
       toast("Removido.");
       fecharModal();
-      localStorage.setItem(LS_CACHE, JSON.stringify({ ts: Date.now(), e: state.entradas, s: state.saidas }));
+      salvarCacheSeguro(state.entradas, state.saidas);
       renderTodasAbas();
     } catch (err) { toast(err.message, true); }
   }

@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v12 (gerador de relatório PDF) */
-const CACHE = "caixa-breda-v12";
+/* Service Worker — Caixa Breda v13 (fix cache quota localStorage) */
+const CACHE = "caixa-breda-v13";
 const ASSETS = [
   "./",
   "./index.html",
