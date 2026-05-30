@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 540" fill="none">
+  <defs>
+    <linearGradient id="aegisGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1f3d"/>
+      <stop offset="50%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="aegisInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- AEGIS · escudo arredondado com gradiente azul -->
+  <g transform="translate(225 25)">
+    <!-- Escudo/aegis principal -->
+    <path d="M 75 0
+             L 145 0
+             A 5 5 0 0 1 150 5
+             L 150 130
+             Q 150 165 110 195
+             L 75 215
+             L 40 195
+             Q 0 165 0 130
+             L 0 5
+             A 5 5 0 0 1 5 0
+             L 75 0 Z"
+          fill="url(#aegisGrad)"/>
+    <!-- Brilho interno top -->
+    <path d="M 75 0
+             L 145 0
+             A 5 5 0 0 1 150 5
+             L 150 100
+             L 0 100
+             L 0 5
+             A 5 5 0 0 1 5 0
+             L 75 0 Z"
+          fill="url(#aegisInner)"/>
+    <!-- Filete dourado contorno discreto -->
+    <path d="M 75 0
+             L 145 0
+             A 5 5 0 0 1 150 5
+             L 150 130
+             Q 150 165 110 195
+             L 75 215
+             L 40 195
+             Q 0 165 0 130
+             L 0 5
+             A 5 5 0 0 1 5 0
+             L 75 0 Z"
+          fill="none" stroke="#fbbf24" stroke-width="0.8" opacity="0.5"/>
+
+    <!-- B / BALANÇA estilizado em branco -->
+    <g fill="#ffffff" stroke="none">
+      <!-- Eixo vertical (pilar) -->
+      <rect x="38" y="32" width="14" height="148" rx="2"/>
+      <!-- Lóbulo superior do B -->
+      <path d="M 52 38
+               L 52 86
+               L 88 86
+               A 24 24 0 0 0 88 38
+               Z
+               M 64 50
+               L 88 50
+               A 12 12 0 0 1 88 74
+               L 64 74
+               Z" fill-rule="evenodd"/>
+      <!-- Lóbulo inferior do B -->
+      <path d="M 52 92
+               L 52 152
+               L 96 152
+               A 30 30 0 0 0 96 92
+               Z
+               M 64 104
+               L 96 104
+               A 18 18 0 0 1 96 140
+               L 64 140
+               Z" fill-rule="evenodd"/>
+      <!-- Travessão da balança (linha horizontal sutil) -->
+      <rect x="20" y="86" width="110" height="2" rx="1" opacity="0.65"/>
+      <!-- Pratos da balança (círculos discretos nas extremidades) -->
+      <circle cx="22" cy="92" r="3.5" opacity="0.85"/>
+      <circle cx="128" cy="92" r="3.5" opacity="0.85"/>
+      <!-- Detalhe verde sutil no ponto central (vida/prosperidade) -->
+      <circle cx="75" cy="87" r="2.2" fill="#10b981"/>
+    </g>
+  </g>
+
+  <!-- WORDMARK · BREDA em serif premium grande -->
+  <text x="300" y="350"
+        text-anchor="middle"
+        font-family="'Fraunces', 'DM Serif Display', 'Playfair Display', serif"
+        font-size="92"
+        font-weight="700"
+        fill="#0a1f3d"
+        letter-spacing="2">BREDA</text>
+
+  <!-- Filete dourado divisor -->
+  <line x1="240" y1="380" x2="290" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
+  <line x1="310" y1="380" x2="360" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
+  <circle cx="300" cy="380" r="2" fill="#1e3a8a"/>
+
+  <!-- SUBTÍTULO · descritor refinado -->
+  <text x="300" y="412"
+        text-anchor="middle"
+        font-family="'Inter', system-ui, sans-serif"
+        font-size="14"
+        font-weight="500"
+        fill="#1e3a8a"
+        letter-spacing="8">SOCIEDADE DE ADVOGADOS</text>
+
+  <!-- Selo institucional -->
+  <text x="300" y="448"
+        text-anchor="middle"
+        font-family="'Inter', system-ui, sans-serif"
+        font-size="10"
+        font-weight="500"
+        fill="#64748b"
+        letter-spacing="4">EST. CUIABÁ · MATO GROSSO</text>
+</svg>

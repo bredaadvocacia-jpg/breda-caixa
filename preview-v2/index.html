@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Preview v2 · Caixa Breda — Heritage Aegis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@300;400;500;600;700;800&family=Spectral:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/style-v2.css" />
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     NAV FIXO DE COMPARAÇÃO
+     ════════════════════════════════════════════════════════════ -->
+<div class="compare-bar">
+  <div class="compare-bar-inner">
+    <div class="compare-tag">PREVIEW V2 · HERITAGE AEGIS</div>
+    <div class="compare-nav">
+      <a href="#login" class="compare-link active">01 Acesso</a>
+      <a href="#dashboard" class="compare-link">02 Dashboard</a>
+      <a href="#movimentacoes" class="compare-link">03 Movimentações</a>
+      <a href="#analise" class="compare-link">04 Análise</a>
+    </div>
+    <a href="https://bredaadvocacia-jpg.github.io/breda-caixa/app.html" class="compare-back">← versão atual</a>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     TELA 01 — ACESSO (Login)
+     ════════════════════════════════════════════════════════════ -->
+<section class="screen screen-login" id="login">
+  <div class="bg-gradient"></div>
+  <div class="bg-noise"></div>
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <!-- LOGO AEGIS inline -->
+      <svg class="login-logo" viewBox="0 0 600 540" fill="none">
+        <defs>
+          <linearGradient id="aegLgGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0a1f3d"/>
+            <stop offset="50%" stop-color="#1e3a8a"/>
+            <stop offset="100%" stop-color="#38bdf8"/>
+          </linearGradient>
+          <linearGradient id="aegLgInner" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <g transform="translate(225 25)">
+          <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegLgGrad)"/>
+          <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 100 L 0 100 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegLgInner)"/>
+          <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="none" stroke="#fbbf24" stroke-width="0.8" opacity="0.55"/>
+          <g fill="#ffffff" stroke="none">
+            <rect x="38" y="32" width="14" height="148" rx="2"/>
+            <path d="M 52 38 L 52 86 L 88 86 A 24 24 0 0 0 88 38 Z M 64 50 L 88 50 A 12 12 0 0 1 88 74 L 64 74 Z" fill-rule="evenodd"/>
+            <path d="M 52 92 L 52 152 L 96 152 A 30 30 0 0 0 96 92 Z M 64 104 L 96 104 A 18 18 0 0 1 96 140 L 64 140 Z" fill-rule="evenodd"/>
+            <rect x="20" y="86" width="110" height="2" rx="1" opacity="0.7"/>
+            <circle cx="22" cy="92" r="3.5" opacity="0.85"/>
+            <circle cx="128" cy="92" r="3.5" opacity="0.85"/>
+            <circle cx="75" cy="87" r="2.2" fill="#10b981"/>
+          </g>
+        </g>
+        <text x="300" y="350" text-anchor="middle" font-family="Fraunces, serif" font-size="92" font-weight="700" fill="#0a1f3d" letter-spacing="2">BREDA</text>
+        <line x1="240" y1="380" x2="290" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
+        <line x1="310" y1="380" x2="360" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
+        <circle cx="300" cy="380" r="2" fill="#1e3a8a"/>
+        <text x="300" y="412" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="500" fill="#1e3a8a" letter-spacing="8">SOCIEDADE DE ADVOGADOS</text>
+        <text x="300" y="448" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="500" fill="#64748b" letter-spacing="4">EST. CUIABÁ · MATO GROSSO</text>
+      </svg>
+
+      <div class="divider-fancy">
+        <span class="divider-line"></span>
+        <span class="divider-dot"></span>
+        <span class="divider-text">SISTEMA DE CAIXA</span>
+        <span class="divider-dot"></span>
+        <span class="divider-line"></span>
+      </div>
+
+      <h1 class="welcome">Bem-vindo de volta</h1>
+      <p class="welcome-sub">Acesso restrito · sessão protegida por código</p>
+
+      <form class="form">
+        <div class="field">
+          <label>URL da API</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔗</span>
+            <input type="url" placeholder="https://script.google.com/macros/s/.../exec" value="https://script.google.com/macros/s/AKfycbX..." />
+          </div>
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔐</span>
+            <input type="password" placeholder="••••••••" value="••••••••" />
+          </div>
+        </div>
+        <button type="button" class="btn-primary">
+          <span>Continuar</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <div class="login-foot">
+        <span class="badge-secure">
+          <span class="badge-dot"></span>
+          Verificação em duas etapas ativa
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════
+     TELA 02 — DASHBOARD (Insights)
+     ════════════════════════════════════════════════════════════ -->
+<section class="screen screen-dash" id="dashboard">
+  <div class="bg-gradient soft"></div>
+  <div class="bg-noise"></div>
+
+  <header class="topbar-v2">
+    <div class="topbar-inner">
+      <div class="brand-mini">
+        <svg width="36" height="36" viewBox="0 0 150 215" fill="none">
+          <defs>
+            <linearGradient id="bMini" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#0a1f3d"/>
+              <stop offset="100%" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+          <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#bMini)"/>
+          <g fill="#ffffff">
+            <rect x="38" y="32" width="14" height="148" rx="2"/>
+            <path d="M 52 38 L 52 86 L 88 86 A 24 24 0 0 0 88 38 Z M 64 50 L 88 50 A 12 12 0 0 1 88 74 L 64 74 Z" fill-rule="evenodd"/>
+            <path d="M 52 92 L 52 152 L 96 152 A 30 30 0 0 0 96 92 Z M 64 104 L 96 104 A 18 18 0 0 1 96 140 L 64 140 Z" fill-rule="evenodd"/>
+            <circle cx="75" cy="87" r="2.2" fill="#10b981"/>
+          </g>
+        </svg>
+        <div class="brand-text">
+          <div class="brand-name">BREDA</div>
+          <div class="brand-tagline">Sociedade de Advogados</div>
+        </div>
+      </div>
+
+      <nav class="tabs-v2">
+        <button class="tab-v2 active">Insights</button>
+        <button class="tab-v2">Movimentações</button>
+        <button class="tab-v2">Análise</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button class="icon-btn-v2" title="Notificações">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="badge-num">3</span>
+        </button>
+        <button class="icon-btn-v2">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="user-pill">
+          <div class="user-avatar">MB</div>
+          <div class="user-info">
+            <div class="user-name">Mauro Breda</div>
+            <div class="user-role">Sócio</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <!-- Header de boas-vindas com ação -->
+    <div class="dash-welcome">
+      <div>
+        <div class="dash-period">ABRIL · 2026</div>
+        <h1 class="dash-title">Olá, Mauro <span class="wave">👋</span></h1>
+        <p class="dash-lede">Seu caixa fechou o último mês com <strong>+12,6%</strong> de margem. Aqui está o resumo.</p>
+      </div>
+      <button class="btn-action">
+        <span class="btn-action-icon">＋</span>
+        <span>Novo lançamento</span>
+      </button>
+    </div>
+
+    <!-- KPIs em glass cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-receita">
+        <div class="kpi-head">
+          <div class="kpi-label">Receita do mês</div>
+          <div class="kpi-icon-wrap"><svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5M12 19V9"/></svg></div>
+        </div>
+        <div class="kpi-value">R$ 202.801<span class="kpi-decimal">,00</span></div>
+        <div class="kpi-spark">
+          <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+            <path d="M 0 22 L 14 18 L 28 20 L 42 14 L 56 16 L 70 10 L 84 12 L 100 5" stroke="#10b981" stroke-width="1.8" fill="none"/>
+            <path d="M 0 22 L 14 18 L 28 20 L 42 14 L 56 16 L 70 10 L 84 12 L 100 5 L 100 30 L 0 30 Z" fill="rgba(16,185,129,0.15)"/>
+          </svg>
+        </div>
+        <div class="kpi-sub kpi-up">▲ 12,6% vs março</div>
+      </div>
+
+      <div class="kpi-card kpi-despesa">
+        <div class="kpi-head">
+          <div class="kpi-label">Despesa do mês</div>
+          <div class="kpi-icon-wrap neg"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5M12 5v10"/></svg></div>
+        </div>
+        <div class="kpi-value">R$ 218.182<span class="kpi-decimal">,82</span></div>
+        <div class="kpi-spark">
+          <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+            <path d="M 0 8 L 14 12 L 28 10 L 42 18 L 56 14 L 70 22 L 84 19 L 100 24" stroke="#ef4444" stroke-width="1.8" fill="none"/>
+            <path d="M 0 8 L 14 12 L 28 10 L 42 18 L 56 14 L 70 22 L 84 19 L 100 24 L 100 30 L 0 30 Z" fill="rgba(239,68,68,0.12)"/>
+          </svg>
+        </div>
+        <div class="kpi-sub kpi-down">▲ 4,3% vs março</div>
+      </div>
+
+      <div class="kpi-card kpi-saldo">
+        <div class="kpi-head">
+          <div class="kpi-label">Saldo operacional</div>
+          <div class="kpi-icon-wrap accent"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        </div>
+        <div class="kpi-value kpi-pos">R$ 25.618<span class="kpi-decimal">,18</span></div>
+        <div class="kpi-spark">
+          <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+            <path d="M 0 18 L 14 14 L 28 16 L 42 11 L 56 13 L 70 8 L 84 10 L 100 6" stroke="#38bdf8" stroke-width="1.8" fill="none"/>
+          </svg>
+        </div>
+        <div class="kpi-sub kpi-up">▲ 8,2% acumulado</div>
+      </div>
+
+      <div class="kpi-card kpi-margem">
+        <div class="kpi-head">
+          <div class="kpi-label">Margem</div>
+          <div class="kpi-icon-wrap gold"><svg viewBox="0 0 24 24"><path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></svg></div>
+        </div>
+        <div class="kpi-value">12,6<span class="kpi-decimal">%</span></div>
+        <div class="kpi-ring">
+          <svg viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.5" stroke="rgba(255,255,255,0.2)" stroke-width="3" fill="none"/>
+            <circle cx="18" cy="18" r="15.5" stroke="#fbbf24" stroke-width="3" fill="none"
+                    stroke-dasharray="97 100" stroke-dashoffset="0" transform="rotate(-90 18 18)" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="kpi-sub kpi-neutral">acima da média anual (10,2%)</div>
+      </div>
+    </div>
+
+    <!-- Bloco IA + Alertas -->
+    <div class="dash-grid">
+      <div class="ai-block-v2">
+        <div class="ai-head-v2">
+          <div class="ai-avatar">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2"/><path d="M9 9l3 3 3-3M9 15h6" stroke="white" stroke-width="2"/></svg>
+          </div>
+          <div>
+            <div class="ai-title-v2">Síntese executiva</div>
+            <div class="ai-subtitle">Gerada pelo modelo Llama 3.1 · há 4 minutos</div>
+          </div>
+          <div class="ai-spark-status"><span></span><span></span><span></span></div>
+        </div>
+        <div class="ai-body-v2">
+          <p>Em <strong>Abril 2026</strong>, a receita foi <span class="hl-num">R$ 202.801,00</span> · despesa <span class="hl-num">R$ 218.182,82</span></p>
+          <p><strong>Margem +12,6%.</strong></p>
+          <p>Variação vs Março: <span class="hl-pos">+9,5%</span> em receita e <span class="hl-neg">+4,3%</span> em despesa.</p>
+          <p class="ai-divider"></p>
+          <p>Nos últimos 24 meses, as receitas concentraram-se em <strong>Honorários</strong> <span class="hl-num">(R$ 5.969.283,02)</span> e <strong>Sucumbência</strong>.</p>
+          <p>As despesas foram dominadas por <strong>Retiradas Pró-labore</strong> <span class="hl-num">(R$ 4.751.468,02)</span> e Despesas Fixas.</p>
+          <p class="ai-callout">
+            <span class="ai-callout-icon">⚠</span>
+            <span><strong>Atenção:</strong> margem positiva diminuindo nos últimos meses — vale revisar a estratégia de receita e despesa.</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="alerts-block">
+        <div class="alerts-head">
+          <h3>Alertas inteligentes</h3>
+          <span class="alerts-count">5</span>
+        </div>
+        <div class="alerts-list">
+          <div class="alert-v2 alert-high">
+            <div class="alert-bar"></div>
+            <div class="alert-content">
+              <div class="alert-title">Gasto acima da média</div>
+              <div class="alert-desc">Despesas Fixas em Abril/2025 (R$ 651.065,28) — 4,5× a média histórica</div>
+              <div class="alert-meta">há 2 dias · categoria: Despesas Fixas</div>
+            </div>
+          </div>
+          <div class="alert-v2 alert-mid">
+            <div class="alert-bar"></div>
+            <div class="alert-content">
+              <div class="alert-title">Receita ausente</div>
+              <div class="alert-desc">Rendas / Aplicações não veio em Abril/2026</div>
+              <div class="alert-meta">recorrente há 18 meses</div>
+            </div>
+          </div>
+          <div class="alert-v2 alert-info">
+            <div class="alert-bar"></div>
+            <div class="alert-content">
+              <div class="alert-title">Gasto novo atípico</div>
+              <div class="alert-desc">R$ 15.000,00 em Abril/2025 · categoria Despesas Fixas</div>
+              <div class="alert-meta">primeira ocorrência</div>
+            </div>
+          </div>
+          <div class="alert-v2 alert-mid">
+            <div class="alert-bar"></div>
+            <div class="alert-content">
+              <div class="alert-title">Queda de receita</div>
+              <div class="alert-desc">-10,5% em Abril/2026 vs Março/2026</div>
+              <div class="alert-meta">tendência: 2º mês seguido</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat IA -->
+    <div class="chat-v2">
+      <div class="chat-head-v2">
+        <div class="chat-icon-wrap">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <div class="chat-title">Pergunte ao seu caixa</div>
+          <div class="chat-sub">conversa em linguagem natural com seus dados financeiros</div>
+        </div>
+      </div>
+      <div class="chat-suggestions">
+        <button class="chat-pill">Qual cliente paga mais?</button>
+        <button class="chat-pill">Compare 2024 e 2025</button>
+        <button class="chat-pill">Tem gasto fora do padrão?</button>
+        <button class="chat-pill">Previsão pros próximos 3 meses</button>
+      </div>
+      <div class="chat-input-row-v2">
+        <input type="text" placeholder="Ex: quanto faturei em honorários em 2025?" />
+        <button class="btn-chat-send">
+          <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" fill="white"/></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════
+     TELA 03 — MOVIMENTAÇÕES
+     ════════════════════════════════════════════════════════════ -->
+<section class="screen screen-mov" id="movimentacoes">
+  <div class="bg-gradient soft"></div>
+
+  <main class="dash-main">
+    <div class="page-header">
+      <div>
+        <div class="page-tag">REGISTRO FINANCEIRO</div>
+        <h1 class="page-title">Movimentações</h1>
+        <p class="page-lede">Filtre, busque e analise cada lançamento da sua sociedade.</p>
+      </div>
+      <div class="page-actions">
+        <button class="btn-ghost-v2">
+          <svg viewBox="0 0 24 24"><path d="M12 3v14M5 12l7 7 7-7M5 21h14"/></svg>
+          Importar extrato
+        </button>
+        <button class="btn-primary-sm">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Gerar relatório
+        </button>
+      </div>
+    </div>
+
+    <!-- Filtros premium -->
+    <div class="filters-v2">
+      <div class="filters-row">
+        <div class="filter-chip filter-chip-active">
+          <span class="dot-pos"></span>
+          Entradas <span class="count">87</span>
+        </div>
+        <div class="filter-chip filter-chip-active">
+          <span class="dot-neg"></span>
+          Saídas <span class="count">312</span>
+        </div>
+        <div class="filter-divider"></div>
+        <div class="select-pill">
+          <span class="label">Ano</span>
+          <span class="val">2026 ▾</span>
+        </div>
+        <div class="select-pill">
+          <span class="label">Mês</span>
+          <span class="val">Abril ▾</span>
+        </div>
+        <div class="search-pill">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" placeholder="Buscar descrição (ex: Replantar, VIVO...)" value="" />
+        </div>
+      </div>
+      <div class="filters-row presets">
+        <span class="preset-label">PERÍODO:</span>
+        <button class="preset">Últ. 30 dias</button>
+        <button class="preset">Últ. 90 dias</button>
+        <button class="preset active">Este ano</button>
+        <button class="preset">Ano anterior</button>
+        <button class="preset">Tudo</button>
+      </div>
+    </div>
+
+    <!-- Tabela premium -->
+    <div class="tbl-v2">
+      <div class="tbl-head-v2">
+        <h3>Lançamentos · Abril/2026</h3>
+        <span class="tbl-summary"><span class="hl-pos">+R$ 202.801,00</span> entradas · <span class="hl-neg">−R$ 218.182,82</span> saídas</span>
+      </div>
+      <table class="lancamentos-tbl">
+        <thead>
+          <tr>
+            <th style="width:110px">Data</th>
+            <th style="width:60px">Tipo</th>
+            <th>Descrição</th>
+            <th style="width:180px">Categoria</th>
+            <th style="text-align:right; width:160px">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-date">30/04/2026</td>
+            <td><span class="tipo-pill tipo-pos">↑</span></td>
+            <td class="td-desc">Honorários Grupo RZK · referente a Abril/2026</td>
+            <td><span class="cat-tag">Honorários</span></td>
+            <td class="td-val pos">+ R$ 45.230,00</td>
+          </tr>
+          <tr>
+            <td class="td-date">28/04/2026</td>
+            <td><span class="tipo-pill tipo-pos">↑</span></td>
+            <td class="td-desc">Sucumbência Processo 1234567 · Replantar</td>
+            <td><span class="cat-tag">Sucumbência</span></td>
+            <td class="td-val pos">+ R$ 12.890,50</td>
+          </tr>
+          <tr>
+            <td class="td-date">28/04/2026</td>
+            <td><span class="tipo-pill tipo-neg">↓</span></td>
+            <td class="td-desc">VIVO · plano corporativo (Abril)</td>
+            <td><span class="cat-tag">Despesas Fixas</span></td>
+            <td class="td-val neg">− R$ 850,00</td>
+          </tr>
+          <tr>
+            <td class="td-date">25/04/2026</td>
+            <td><span class="tipo-pill tipo-neg">↓</span></td>
+            <td class="td-desc">Simples Nacional Parcelamento (01 03 05 06 e 01 2024)</td>
+            <td><span class="cat-tag">Impostos</span></td>
+            <td class="td-val neg">− R$ 16.456,11</td>
+          </tr>
+          <tr>
+            <td class="td-date">22/04/2026</td>
+            <td><span class="tipo-pill tipo-pos">↑</span></td>
+            <td class="td-desc">Honorários Carmen Mello · fiscal/maio <span class="att-clip">📎 2</span></td>
+            <td><span class="cat-tag">Honorários</span></td>
+            <td class="td-val pos">+ R$ 10.000,00</td>
+          </tr>
+          <tr>
+            <td class="td-date">20/04/2026</td>
+            <td><span class="tipo-pill tipo-neg">↓</span></td>
+            <td class="td-desc">Mauro R. Breda · pró-labore</td>
+            <td><span class="cat-tag">Retiradas</span></td>
+            <td class="td-val neg">− R$ 38.300,00</td>
+          </tr>
+          <tr>
+            <td class="td-date">18/04/2026</td>
+            <td><span class="tipo-pill tipo-neg">↓</span></td>
+            <td class="td-desc">Delmira · limpeza escritório</td>
+            <td><span class="cat-tag">Despesas Diversas</span></td>
+            <td class="td-val neg">− R$ 150,00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════
+     TELA 04 — ANÁLISE
+     ════════════════════════════════════════════════════════════ -->
+<section class="screen screen-analise" id="analise">
+  <div class="bg-gradient soft"></div>
+
+  <main class="dash-main">
+    <div class="page-header">
+      <div>
+        <div class="page-tag">INTELIGÊNCIA FINANCEIRA</div>
+        <h1 class="page-title">Análise consolidada</h1>
+        <p class="page-lede">Gráficos, previsões e composição do ano em curso.</p>
+      </div>
+    </div>
+
+    <!-- Cards de análise -->
+    <div class="analise-grid">
+      <div class="chart-card-v2 chart-big">
+        <div class="chart-head">
+          <h3>Receitas × Despesas · 2026</h3>
+          <div class="chart-legend">
+            <span><span class="leg-dot pos"></span>Receitas</span>
+            <span><span class="leg-dot neg"></span>Despesas</span>
+          </div>
+        </div>
+        <div class="bars-chart">
+          <div class="bar-group"><div class="bar bar-pos" style="height:62%"></div><div class="bar bar-neg" style="height:48%"></div><span class="bar-label">Jan</span></div>
+          <div class="bar-group"><div class="bar bar-pos" style="height:78%"></div><div class="bar bar-neg" style="height:52%"></div><span class="bar-label">Fev</span></div>
+          <div class="bar-group"><div class="bar bar-pos" style="height:71%"></div><div class="bar bar-neg" style="height:58%"></div><span class="bar-label">Mar</span></div>
+          <div class="bar-group"><div class="bar bar-pos" style="height:68%"></div><div class="bar bar-neg" style="height:73%"></div><span class="bar-label">Abr</span></div>
+          <div class="bar-group"><div class="bar bar-pos" style="height:0%; opacity:.3"></div><div class="bar bar-neg" style="height:0%; opacity:.3"></div><span class="bar-label muted">Mai</span></div>
+          <div class="bar-group"><div class="bar bar-pos" style="height:0%; opacity:.3"></div><div class="bar bar-neg" style="height:0%; opacity:.3"></div><span class="bar-label muted">Jun</span></div>
+        </div>
+      </div>
+
+      <div class="chart-card-v2 chart-saldo">
+        <div class="chart-head">
+          <h3>Saldo acumulado</h3>
+          <span class="chart-period">YTD</span>
+        </div>
+        <div class="saldo-big">R$ 102.483<span class="saldo-decimal">,50</span></div>
+        <svg viewBox="0 0 200 60" preserveAspectRatio="none" class="saldo-line">
+          <defs>
+            <linearGradient id="saldoFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M 0 50 L 33 42 L 66 28 L 100 22 L 133 18 L 166 12 L 200 8" stroke="#10b981" stroke-width="2" fill="none"/>
+          <path d="M 0 50 L 33 42 L 66 28 L 100 22 L 133 18 L 166 12 L 200 8 L 200 60 L 0 60 Z" fill="url(#saldoFill)"/>
+          <circle cx="200" cy="8" r="3" fill="#10b981"/>
+          <circle cx="200" cy="8" r="6" fill="none" stroke="#10b981" stroke-width="1" opacity="0.5"/>
+        </svg>
+      </div>
+
+      <div class="chart-card-v2 chart-prev">
+        <div class="chart-head">
+          <h3>Previsão · próximos 3 meses</h3>
+          <span class="chart-meta">via IA</span>
+        </div>
+        <div class="prev-list">
+          <div class="prev-item">
+            <div class="prev-month">MAI · 2026</div>
+            <div class="prev-row"><span class="prev-lbl">Receita</span><span class="prev-val pos">R$ 218.500,00</span></div>
+            <div class="prev-row"><span class="prev-lbl">Despesa</span><span class="prev-val neg">R$ 195.200,00</span></div>
+            <div class="prev-row prev-net"><span class="prev-lbl">Saldo</span><span class="prev-val">+ R$ 23.300,00</span></div>
+          </div>
+          <div class="prev-item">
+            <div class="prev-month">JUN · 2026</div>
+            <div class="prev-row"><span class="prev-lbl">Receita</span><span class="prev-val pos">R$ 235.000,00</span></div>
+            <div class="prev-row"><span class="prev-lbl">Despesa</span><span class="prev-val neg">R$ 200.800,00</span></div>
+            <div class="prev-row prev-net"><span class="prev-lbl">Saldo</span><span class="prev-val">+ R$ 34.200,00</span></div>
+          </div>
+          <div class="prev-item">
+            <div class="prev-month">JUL · 2026</div>
+            <div class="prev-row"><span class="prev-lbl">Receita</span><span class="prev-val pos">R$ 198.000,00</span></div>
+            <div class="prev-row"><span class="prev-lbl">Despesa</span><span class="prev-val neg">R$ 210.500,00</span></div>
+            <div class="prev-row prev-net"><span class="prev-lbl">Saldo</span><span class="prev-val neg">− R$ 12.500,00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card-v2 chart-cat">
+        <div class="chart-head">
+          <h3>Top categorias · 2026</h3>
+        </div>
+        <div class="cat-bars">
+          <div class="cat-row"><span class="cat-name">Honorários</span><div class="cat-bar"><div class="cat-fill pos" style="width:88%"></div></div><span class="cat-val">R$ 645.230</span></div>
+          <div class="cat-row"><span class="cat-name">Retiradas Pró-labore</span><div class="cat-bar"><div class="cat-fill neg" style="width:74%"></div></div><span class="cat-val">R$ 542.890</span></div>
+          <div class="cat-row"><span class="cat-name">Sucumbência</span><div class="cat-bar"><div class="cat-fill pos" style="width:42%"></div></div><span class="cat-val">R$ 309.450</span></div>
+          <div class="cat-row"><span class="cat-name">Despesas Fixas</span><div class="cat-bar"><div class="cat-fill neg" style="width:38%"></div></div><span class="cat-val">R$ 278.110</span></div>
+          <div class="cat-row"><span class="cat-name">Impostos</span><div class="cat-bar"><div class="cat-fill neg" style="width:24%"></div></div><span class="cat-val">R$ 176.520</span></div>
+          <div class="cat-row"><span class="cat-name">Reembolsos</span><div class="cat-bar"><div class="cat-fill pos" style="width:18%"></div></div><span class="cat-val">R$ 131.080</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<footer class="preview-foot">
+  <p>
+    <strong>Preview v2 · "Heritage Aegis"</strong> — protótipo visual estático.
+    <br>Nenhum dado real. Nenhuma função conectada.
+    Use os links acima pra rolar entre as 4 telas.
+  </p>
+  <p class="foot-cta">Gostou? <a href="https://bredaadvocacia-jpg.github.io/breda-caixa/app.html">Volte ao app atual</a> e me diga "aplica v2" pra eu trocar tudo de verdade.</p>
+</footer>
+
+<script>
+  // Marca link ativo conforme rolar
+  const links = document.querySelectorAll('.compare-link');
+  const secs = document.querySelectorAll('.screen');
+  const map = { login: 0, dashboard: 1, movimentacoes: 2, analise: 3 };
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY + 80;
+    let idx = 0;
+    secs.forEach((s, i) => { if (s.offsetTop <= y) idx = i; });
+    links.forEach((l, i) => l.classList.toggle('active', i === idx));
+  });
+</script>
+
+</body>
+</html>
