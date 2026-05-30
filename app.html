@@ -410,6 +410,24 @@
       <label>URL da API</label>
       <input id="drawer-url" type="url" readonly />
     </div>
+
+    <!-- Toggle: exigir login a cada abertura -->
+    <div class="security-toggle">
+      <div class="security-toggle-info">
+        <div class="security-toggle-title">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:5px">
+            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+          </svg>
+          Exigir login a cada abertura
+        </div>
+        <div class="security-toggle-desc">Mais seguro · sempre pede senha + código por e-mail ao abrir o app.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-sempre-login" />
+        <span class="switch-slider"></span>
+      </label>
+    </div>
+
     <button class="btn btn-primary" id="btn-trocar-senha" style="width:100%; margin-top:8px">
       Trocar senha
     </button>

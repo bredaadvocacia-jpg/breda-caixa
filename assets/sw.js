@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v17 (abertura instantânea: stale-while-revalidate) */
-const CACHE = "caixa-breda-v17";
+/* Service Worker — Caixa Breda v18 (toggle: exigir login a cada abertura) */
+const CACHE = "caixa-breda-v18";
 const ASSETS = [
   "./",
   "./index.html",

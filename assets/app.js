@@ -5,6 +5,7 @@
   const LS_URL = "caixaBredaApiUrl";
   const LS_TOK = "caixaBredaToken";
   const LS_CACHE = "caixaBredaCache";
+  const LS_SEMPRE_LOGIN = "caixaBredaSempreLogin";  // "1" = exige login a cada abertura
 
   /**
    * Salva o cache no localStorage com fallback gradual: tenta TUDO; se estourar
@@ -953,6 +954,8 @@
   // ====== DRAWER + TROCAR SENHA ======
   async function abrirDrawer() {
     $("#drawer-url").value = state.apiUrl;
+    // Reflete o estado atual do toggle de segurança
+    $("#toggle-sempre-login").checked = localStorage.getItem(LS_SEMPRE_LOGIN) === "1";
     $("#drawer").classList.add("open");
     $("#drawer-backdrop").classList.add("open");
     try {
@@ -2129,6 +2132,17 @@
 
     // Trocar senha
     $("#btn-trocar-senha").addEventListener("click", () => { fecharDrawer(); abrirTrocar(); });
+
+    // Toggle de segurança: exigir login a cada abertura
+    $("#toggle-sempre-login").addEventListener("change", e => {
+      if (e.target.checked) {
+        localStorage.setItem(LS_SEMPRE_LOGIN, "1");
+        toast("Login será exigido a cada abertura do app.");
+      } else {
+        localStorage.removeItem(LS_SEMPRE_LOGIN);
+        toast("Sessão de 24h restaurada.");
+      }
+    });
     $("#btn-fechar-trocar").addEventListener("click", fecharTrocar);
     $("#btn-cancelar-trocar").addEventListener("click", fecharTrocar);
     $("#trocar-form").addEventListener("submit", salvarNovaSenha);
@@ -2164,6 +2178,17 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    // Segurança extra: se o usuário ativou "exigir login a cada abertura",
+    // limpa o token de sessão ANTES de qualquer renderização. Mantém URL
+    // e flag — só descarta a sessão.
+    if (localStorage.getItem(LS_SEMPRE_LOGIN) === "1") {
+      localStorage.removeItem(LS_TOK);
+      localStorage.removeItem(LS_CACHE);
+      localStorage.removeItem("caixaBredaIA_resumo");
+      localStorage.removeItem("caixaBredaIA_alertas");
+      state.token = "";
+    }
+
     bindEvents();
     setupInstall();
     ativarTab(state.abaAtiva);
