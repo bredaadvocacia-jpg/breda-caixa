@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v16 (Heritage Aegis: azul + verde + nova logo) */
-const CACHE = "caixa-breda-v16";
+/* Service Worker — Caixa Breda v17 (abertura instantânea: stale-while-revalidate) */
+const CACHE = "caixa-breda-v17";
 const ASSETS = [
   "./",
   "./index.html",

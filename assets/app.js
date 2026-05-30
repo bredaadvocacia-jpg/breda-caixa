@@ -230,61 +230,143 @@
   async function logout() {
     try { await apiPost("logout"); } catch (e) {}
     localStorage.removeItem(LS_TOK);
+    localStorage.removeItem(LS_CACHE);
+    localStorage.removeItem("caixaBredaIA_resumo");
+    localStorage.removeItem("caixaBredaIA_alertas");
     state.token = "";
     state.entradas = []; state.saidas = [];
     abrirLogin("Sessão encerrada.");
   }
 
-  // ====== CARREGAR DADOS ======
+  // ====== CARREGAR DADOS — STALE-WHILE-REVALIDATE ======
+  // 1. Renderiza imediatamente do cache (instantâneo)
+  // 2. Em background, busca atualização da API
+  // 3. Re-renderiza só se vier dado novo
   async function carregarTudo() {
+    let temCache = false;
+
+    // Tentativa 1: carregar do cache localStorage (síncrono, ~instantâneo)
     try {
-      const r = await apiGet({ aba: "painel" });
-      state.entradas = r.entradas || [];
-      state.saidas = r.saidas || [];
-      salvarCacheSeguro(state.entradas, state.saidas);
-    } catch (err) {
-      if (/senha|inválid|token|login/i.test(err.message)) { abrirLogin(err.message); return; }
       const c = localStorage.getItem(LS_CACHE);
       if (c) {
         const d = JSON.parse(c);
-        state.entradas = d.e || []; state.saidas = d.s || [];
-        toast("API indisponível — usando cache.", true);
-      } else {
-        toast(err.message, true);
+        if (d.e && d.s) {
+          state.entradas = d.e || [];
+          state.saidas = d.s || [];
+          temCache = true;
+          popularFiltros();
+          renderTodasAbas();
+          renderIADoCache();  // mostra resumo/alertas cacheados
+          if (state.abaAtiva === "analise") carregarPrevisao();
+        }
       }
+    } catch (e) {}
+
+    // Tentativa 2 (background): buscar dados atualizados da API
+    marcarRefreshAtivo(true);
+    try {
+      const r = await apiGet({ aba: "painel" });
+      const entradasNovas = r.entradas || [];
+      const saidasNovas   = r.saidas || [];
+
+      // Detecta se algo mudou (qtd de lançamentos é proxy rápido)
+      const mudou = entradasNovas.length !== state.entradas.length
+                  || saidasNovas.length   !== state.saidas.length;
+
+      state.entradas = entradasNovas;
+      state.saidas   = saidasNovas;
+      salvarCacheSeguro(state.entradas, state.saidas);
+
+      if (mudou || !temCache) {
+        popularFiltros();
+        renderTodasAbas();
+      }
+      state._previsaoLoaded = false;
+      carregarIA();
+      if (state.abaAtiva === "analise") carregarPrevisao();
+    } catch (err) {
+      if (/senha|inválid|token|login/i.test(err.message)) {
+        abrirLogin(err.message);
+        marcarRefreshAtivo(false);
+        return;
+      }
+      // Se já tinha cache na tela, não bloqueia — só avisa discretamente
+      if (temCache) toast("Sem conexão — exibindo dados em cache.", false);
+      else toast(err.message, true);
+    } finally {
+      marcarRefreshAtivo(false);
     }
-    popularFiltros();
-    renderTodasAbas();
-    state._previsaoLoaded = false;  // permite recarregar previsão pós-login
-    carregarIA();
-    if (state.abaAtiva === "analise") carregarPrevisao();
+  }
+
+  /** Indicador rotativo no botão recarregar durante refresh em background. */
+  function marcarRefreshAtivo(ativo) {
+    const btn = $("#btn-recarregar");
+    if (!btn) return;
+    if (ativo) btn.classList.add("girando");
+    else btn.classList.remove("girando");
+  }
+
+  // Cache local de IA (TTL 1h) — mostra instantâneo enquanto API responde
+  const LS_IA_RESUMO  = "caixaBredaIA_resumo";
+  const LS_IA_ALERTAS = "caixaBredaIA_alertas";
+  const IA_LOCAL_TTL_MS = 60 * 60 * 1000;  // 1 hora
+
+  function salvarCacheIA(key, valor) {
+    try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), v: valor })); } catch (e) {}
+  }
+  function lerCacheIA(key) {
+    try {
+      const c = localStorage.getItem(key);
+      if (!c) return null;
+      const d = JSON.parse(c);
+      if (!d || (Date.now() - (d.ts || 0)) > IA_LOCAL_TTL_MS) return null;
+      return d.v;
+    } catch (e) { return null; }
+  }
+
+  function renderIADoCache() {
+    const cacheResumo = lerCacheIA(LS_IA_RESUMO);
+    if (cacheResumo) $("#resumo-ia").innerHTML = formatarResumo(cacheResumo);
+    const cacheAlertas = lerCacheIA(LS_IA_ALERTAS);
+    if (cacheAlertas) renderAlertas(cacheAlertas);
+  }
+
+  function renderAlertas(list) {
+    const wrap = $("#alertas");
+    const meta = $("#alertas-meta");
+    if (!list || list.length === 0) {
+      wrap.innerHTML = `<div class="alert empty"><span class="alert-icon">✓</span><span>Nenhuma anomalia relevante detectada nos últimos meses.</span></div>`;
+      meta.textContent = "0 alertas";
+    } else {
+      wrap.innerHTML = list.map(a => renderAlerta(a)).join("");
+      meta.textContent = list.length + " alerta" + (list.length === 1 ? "" : "s");
+    }
   }
 
   async function carregarIA() {
     if (!state.apiUrl || !state.token) return;
-    // Resumo
+    // Resumo (background) — só sobrescreve se vier resposta nova
     apiGet({ aba: "ia", acao: "resumo" }).then(r => {
       const texto = r.texto || "(sem resposta)";
       $("#resumo-ia").innerHTML = formatarResumo(texto);
+      salvarCacheIA(LS_IA_RESUMO, texto);
     }).catch(err => {
-      $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}</span>`;
+      // Se já tinha cache renderizado, mantém. Senão, mostra erro.
+      if (!lerCacheIA(LS_IA_RESUMO)) {
+        $("#resumo-ia").innerHTML = `<span class="ai-loading">IA indisponível: ${escapeHtml(err.message)}</span>`;
+      }
     });
 
-    // Alertas
+    // Alertas (background)
     apiGet({ aba: "ia", acao: "alertas" }).then(r => {
-      const wrap = $("#alertas");
-      const meta = $("#alertas-meta");
       const list = r.alertas || [];
-      if (list.length === 0) {
-        wrap.innerHTML = `<div class="alert empty"><span class="alert-icon">✓</span><span>Nenhuma anomalia relevante detectada nos últimos meses.</span></div>`;
-        meta.textContent = "0 alertas";
-      } else {
-        wrap.innerHTML = list.map(a => renderAlerta(a)).join("");
-        meta.textContent = list.length + " alerta" + (list.length === 1 ? "" : "s");
-      }
+      renderAlertas(list);
+      salvarCacheIA(LS_IA_ALERTAS, list);
     }).catch(err => {
-      $("#alertas").innerHTML = `<div class="alert"><span class="alert-icon">!</span><span>IA indisponível: ${escapeHtml(err.message)}</span></div>`;
-      $("#alertas-meta").textContent = "—";
+      if (!lerCacheIA(LS_IA_ALERTAS)) {
+        $("#alertas").innerHTML = `<div class="alert"><span class="alert-icon">!</span><span>IA indisponível: ${escapeHtml(err.message)}</span></div>`;
+        $("#alertas-meta").textContent = "—";
+      }
     });
 
     // Previsão (só dispara quando entrar na tab Análise)
