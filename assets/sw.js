@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v13 (fix cache quota localStorage) */
-const CACHE = "caixa-breda-v13";
+/* Service Worker — Caixa Breda v14 (importar extrato OFX/CSV/PDF) */
+const CACHE = "caixa-breda-v14";
 const ASSETS = [
   "./",
   "./index.html",

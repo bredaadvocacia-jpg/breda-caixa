@@ -174,6 +174,10 @@
       </div>
       <div class="field-inline">
         <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-importar-extrato">📥 Importar extrato</button>
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
         <button class="btn btn-primary" id="btn-relatorio">📄 Gerar relatório</button>
       </div>
     </div>
@@ -581,6 +585,91 @@
   </div>
 </div>
 
+<!-- MODAL IMPORTAR EXTRATO BANCÁRIO -->
+<div class="modal-backdrop" id="importar-modal">
+  <div class="modal" style="max-width:820px; max-height:92vh">
+    <div class="modal-head">
+      <h2 id="importar-titulo">Importar extrato bancário</h2>
+      <button class="close-btn" id="btn-fechar-importar">×</button>
+    </div>
+
+    <!-- ETAPA 1: Upload do arquivo -->
+    <div class="modal-body" id="importar-etapa-1">
+      <div style="font-size:13px; color:var(--ink-3); margin-bottom:14px; line-height:1.6">
+        Anexe o extrato do seu banco. Aceitos: <strong>OFX</strong> (mais confiável),
+        <strong>CSV</strong> e <strong>PDF</strong>. Bradesco e Itaú geram esses formatos no app/internet banking.
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="extrato-input" accept=".ofx,.csv,.pdf,.qif,application/pdf,text/csv" hidden />
+        <div class="dropzone-icon">📥</div>
+        <div class="dropzone-title">Solte o arquivo aqui ou clique para escolher</div>
+        <div class="dropzone-sub">OFX · CSV · PDF · até 10 MB</div>
+      </label>
+
+      <div id="extrato-arquivo-info" style="display:none; margin-top:14px; padding:12px 14px; background:var(--surface-2); border-radius:8px; font-size:13px"></div>
+
+      <div class="field" style="margin-top:18px">
+        <label>Os lançamentos detectados serão criados como:</label>
+        <div style="display:flex; gap:8px">
+          <label class="radio-card" style="flex:1">
+            <input type="radio" name="extrato-aba" value="saidas" checked />
+            <div class="radio-card-body">
+              <div class="radio-card-icon">↓</div>
+              <div>
+                <div class="radio-card-title">Saídas (despesas)</div>
+                <div class="radio-card-desc">Use pra extratos de conta corrente — vou separar entradas e saídas individualmente.</div>
+              </div>
+            </div>
+          </label>
+        </div>
+        <small style="color:var(--ink-4); font-size:11px; margin-top:6px; display:block">
+          O app detecta automaticamente o tipo de cada linha (crédito = entrada, débito = saída).
+        </small>
+      </div>
+    </div>
+
+    <!-- ETAPA 2: Revisão dos lançamentos detectados -->
+    <div class="modal-body" id="importar-etapa-2" style="display:none">
+      <div id="importar-resumo" style="font-size:13px; color:var(--ink-2); margin-bottom:12px; padding:12px 14px; background:var(--accent-bg); border-radius:8px; line-height:1.5"></div>
+
+      <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; flex-wrap:wrap">
+        <button class="btn btn-ghost" id="btn-importar-sel-todos" style="font-size:12px; padding:6px 10px">✓ Marcar todos</button>
+        <button class="btn btn-ghost" id="btn-importar-desel-todos" style="font-size:12px; padding:6px 10px">○ Desmarcar todos</button>
+        <button class="btn btn-ghost" id="btn-importar-categorizar" style="font-size:12px; padding:6px 10px">🤖 Re-categorizar com IA</button>
+        <span id="importar-status" style="font-size:11px; color:var(--ink-3); font-style:italic; margin-left:auto"></span>
+      </div>
+
+      <div class="tbl-wrap" style="max-height:50vh; overflow-y:auto">
+        <table class="tabela-extrato">
+          <thead>
+            <tr>
+              <th style="width:34px"><input type="checkbox" id="extrato-todos" checked /></th>
+              <th style="width:84px">Data</th>
+              <th style="width:46px">T</th>
+              <th>Descrição</th>
+              <th style="width:150px">Categoria</th>
+              <th style="text-align:right; width:120px">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="extrato-tabela-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ETAPA 3: Confirmação -->
+    <div class="modal-body" id="importar-etapa-3" style="display:none; text-align:center">
+      <div id="importar-progresso" style="font-size:14px; color:var(--ink-2); padding:20px"></div>
+    </div>
+
+    <div class="modal-foot" id="importar-foot">
+      <button type="button" class="btn btn-ghost" id="btn-importar-cancelar">Cancelar</button>
+      <button type="button" class="btn btn-ghost" id="btn-importar-voltar" style="display:none">← Voltar</button>
+      <button type="button" class="btn btn-primary" id="btn-importar-avancar" disabled>Avançar →</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL GERAR RELATÓRIO -->
 <div class="modal-backdrop" id="relatorio-modal">
   <div class="modal" style="max-width:520px">
@@ -646,6 +735,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.0/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  }
+</script>
 <script src="./assets/app.js"></script>
 </body>
 </html>

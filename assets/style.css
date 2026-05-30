@@ -1257,6 +1257,90 @@ td.col-valor.neg { color: var(--neg); }
   line-height: 1.4;
 }
 
+/* ============ IMPORTAR EXTRATO ============ */
+.dropzone {
+  display: block;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  padding: 36px 20px;
+  text-align: center;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.dropzone:hover {
+  border-color: var(--accent-3);
+  background: var(--accent-bg);
+}
+.dropzone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  transform: scale(1.01);
+}
+.dropzone-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+.dropzone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.dropzone-sub {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.tabela-extrato {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.tabela-extrato thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+  padding: 8px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-3);
+  border-bottom: 1.5px solid var(--line);
+  text-align: left;
+}
+.tabela-extrato tbody td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+.tabela-extrato tbody tr.linha-ignorada {
+  opacity: 0.45;
+}
+.tabela-extrato .col-data { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.tabela-extrato .col-desc { padding: 2px 4px; }
+.tabela-extrato .col-valor { font-weight: 600; font-size: 12.5px; }
+.input-inline {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 12px;
+  background: transparent;
+  width: 100%;
+  font-family: inherit;
+  color: var(--ink);
+}
+.input-inline:hover { background: var(--surface-2); }
+.input-inline:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(124, 94, 30, 0.1);
+}
+select.input-inline { cursor: pointer; }
+
 /* ============ PRINT ============ */
 @media print {
   .topbar, .fab, .filters, .chips, .modal-backdrop, .drawer, .drawer-backdrop, .chat-input-row { display: none !important; }

@@ -1006,6 +1006,509 @@
     } catch (err) { toast(err.message, true); }
   }
 
+  // ====== IMPORTAR EXTRATO BANCÁRIO ======
+  // Estado da importação
+  const imp = {
+    arquivo: null,
+    lancamentos: [],   // [{data, descricao, valor, tipo, categoria, selecionado}, ...]
+    etapa: 1,
+  };
+
+  function abrirModalImportar() {
+    imp.arquivo = null;
+    imp.lancamentos = [];
+    imp.etapa = 1;
+    $("#extrato-input").value = "";
+    $("#extrato-arquivo-info").style.display = "none";
+    $("#btn-importar-avancar").disabled = true;
+    $("#btn-importar-avancar").textContent = "Avançar →";
+    $("#btn-importar-voltar").style.display = "none";
+    mostrarEtapaImport(1);
+    $("#importar-modal").classList.add("open");
+  }
+  function fecharModalImportar() { $("#importar-modal").classList.remove("open"); }
+
+  function mostrarEtapaImport(n) {
+    imp.etapa = n;
+    $("#importar-etapa-1").style.display = n === 1 ? "block" : "none";
+    $("#importar-etapa-2").style.display = n === 2 ? "block" : "none";
+    $("#importar-etapa-3").style.display = n === 3 ? "block" : "none";
+    $("#importar-titulo").textContent = (
+      n === 1 ? "Importar extrato bancário"
+      : n === 2 ? "Revisar lançamentos detectados"
+      : "Importando…"
+    );
+    $("#btn-importar-voltar").style.display = n === 2 ? "inline-block" : "none";
+    $("#btn-importar-avancar").style.display = n === 3 ? "none" : "inline-block";
+    if (n === 1) $("#btn-importar-avancar").textContent = "Avançar →";
+    if (n === 2) $("#btn-importar-avancar").textContent = "Importar selecionados";
+  }
+
+  function escolherArquivoExtrato(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast("Arquivo > 10MB. Use um menor.", true); return; }
+    imp.arquivo = file;
+    const tipo = detectarTipoArquivo(file);
+    $("#extrato-arquivo-info").style.display = "block";
+    $("#extrato-arquivo-info").innerHTML =
+      `<strong>${escapeHtml(file.name)}</strong> · ${fmtBytes(file.size)} · ` +
+      `Formato detectado: <strong style="color:var(--accent)">${tipo.toUpperCase()}</strong>`;
+    $("#btn-importar-avancar").disabled = false;
+  }
+
+  function detectarTipoArquivo(file) {
+    const nome = (file.name || "").toLowerCase();
+    if (nome.endsWith(".ofx") || nome.endsWith(".qif")) return "ofx";
+    if (nome.endsWith(".csv") || nome.endsWith(".txt")) return "csv";
+    if (nome.endsWith(".pdf")) return "pdf";
+    if (file.type === "application/pdf") return "pdf";
+    if (file.type === "text/csv") return "csv";
+    return "csv";  // fallback
+  }
+
+  async function processarExtrato() {
+    if (!imp.arquivo) return;
+    const tipo = detectarTipoArquivo(imp.arquivo);
+    $("#btn-importar-avancar").disabled = true;
+    $("#btn-importar-avancar").textContent = "Processando…";
+
+    try {
+      let lancs = [];
+      if (tipo === "ofx") lancs = await parsearOFX(imp.arquivo);
+      else if (tipo === "csv") lancs = await parsearCSV(imp.arquivo);
+      else if (tipo === "pdf") lancs = await parsearPDF(imp.arquivo);
+
+      if (!lancs || lancs.length === 0) {
+        toast("Nenhum lançamento detectado no arquivo.", true);
+        $("#btn-importar-avancar").disabled = false;
+        $("#btn-importar-avancar").textContent = "Avançar →";
+        return;
+      }
+
+      // Padronizar: cada lançamento { data: ISO, descricao, valor (sempre positivo), tipo, categoria, selecionado }
+      imp.lancamentos = lancs.map(l => ({
+        data: l.data,
+        descricao: (l.descricao || "").trim(),
+        valor: Math.abs(l.valor || 0),
+        tipo: l.tipo || (l.valor < 0 ? "saida" : "entrada"),
+        categoria: l.categoria || "",
+        selecionado: !filtrarComoIgnorar(l),
+      }));
+
+      // Categorização automática via IA (em lote, uma chamada só)
+      $("#importar-status").textContent = "Categorizando com IA…";
+      renderTabelaExtrato();
+      mostrarEtapaImport(2);
+
+      try {
+        await categorizarLote();
+        $("#importar-status").textContent = "Categorias sugeridas pela IA. Revise antes de importar.";
+      } catch (err) {
+        $("#importar-status").textContent = "IA indisponível — categorize manualmente.";
+      }
+      renderTabelaExtrato();
+    } catch (err) {
+      toast("Erro ao processar: " + err.message, true);
+      $("#btn-importar-avancar").disabled = false;
+      $("#btn-importar-avancar").textContent = "Avançar →";
+    }
+  }
+
+  /** Heurística pra marcar lançamentos que provavelmente o usuário NÃO quer importar
+   *  (saldos, transferências internas, etc.) */
+  function filtrarComoIgnorar(l) {
+    const d = (l.descricao || "").toUpperCase();
+    return /SALDO\s+(ANTERIOR|ATUAL|INICIAL|FINAL|DO DIA|EM C\/C)/i.test(d)
+        || /^SALDO/.test(d.trim())
+        || /TOTAL DO PERIODO/.test(d);
+  }
+
+  // ===== PARSERS =====
+
+  /** OFX — Open Financial Exchange (padrão dos bancos brasileiros).
+   *  Estrutura típica:
+   *    <STMTTRN>
+   *      <TRNTYPE>CREDIT|DEBIT</TRNTYPE>
+   *      <DTPOSTED>20260502</DTPOSTED>
+   *      <TRNAMT>6500.00</TRNAMT>
+   *      <MEMO>TED RZK AGRO</MEMO>
+   *    </STMTTRN>
+   */
+  async function parsearOFX(file) {
+    const txt = await file.text();
+    const blocos = txt.split(/<STMTTRN>/i).slice(1);
+    const out = [];
+    for (const bloco of blocos) {
+      const tipo = (bloco.match(/<TRNTYPE>([^<\n\r]+)/i) || [, ""])[1].trim().toUpperCase();
+      const dataRaw = (bloco.match(/<DTPOSTED>([^<\n\r]+)/i) || [, ""])[1].trim();
+      const valor = parseFloat((bloco.match(/<TRNAMT>([^<\n\r]+)/i) || [, "0"])[1]);
+      const memo = (bloco.match(/<MEMO>([^<\n\r]+)/i) || [, ""])[1].trim();
+      const name = (bloco.match(/<NAME>([^<\n\r]+)/i) || [, ""])[1].trim();
+      const descricao = memo || name || "Lançamento OFX";
+      // YYYYMMDD[HHMMSS] → YYYY-MM-DD
+      const data = dataRaw.length >= 8
+        ? `${dataRaw.slice(0,4)}-${dataRaw.slice(4,6)}-${dataRaw.slice(6,8)}`
+        : "";
+      if (!data || isNaN(valor) || valor === 0) continue;
+      out.push({
+        data,
+        descricao,
+        valor: Math.abs(valor),
+        tipo: (tipo === "CREDIT" || valor > 0) ? "entrada" : "saida",
+      });
+    }
+    return out;
+  }
+
+  /** CSV — formato variável. Bradesco e Itaú têm layouts diferentes.
+   *  Heurística: detecta delimitador (`;` ou `,`), identifica colunas
+   *  data/descrição/valor pelo nome do header ou pela posição.
+   */
+  async function parsearCSV(file) {
+    const raw = await file.text();
+    // Remove BOM se houver
+    const clean = raw.replace(/^﻿/, "");
+    const linhas = clean.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (linhas.length === 0) return [];
+
+    // Detectar delimitador (BR usa ;)
+    const delim = (linhas[0].split(";").length > linhas[0].split(",").length) ? ";" : ",";
+
+    // Encontrar primeira linha que tem header (linhas iniciais podem ser cabeçalho do banco)
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(linhas.length, 8); i++) {
+      const cols = linhas[i].split(delim);
+      const txt = linhas[i].toLowerCase();
+      if (cols.length >= 3 && (/data/i.test(txt) || /historico|hist[oó]rico|descri/i.test(txt))) {
+        headerIdx = i; break;
+      }
+    }
+    if (headerIdx < 0) headerIdx = 0;
+
+    const header = linhas[headerIdx].split(delim).map(c => c.trim().replace(/^"|"$/g, "").toLowerCase());
+    const idx = {
+      data: header.findIndex(c => /^data/.test(c) || /lan[cç]amento/.test(c)),
+      desc: header.findIndex(c => /hist[oó]rico|descri[cç][aã]o|lan[cç]amento|memo/.test(c)),
+      valor: header.findIndex(c => /valor/.test(c) && !/saldo/.test(c)),
+      credito: header.findIndex(c => /cr[eé]dito|entrada/.test(c)),
+      debito: header.findIndex(c => /d[eé]bito|sa[ií]da/.test(c)),
+    };
+    // Fallback de posição se não achou pelos nomes
+    if (idx.data < 0) idx.data = 0;
+    if (idx.desc < 0) idx.desc = 1;
+
+    const out = [];
+    for (let i = headerIdx + 1; i < linhas.length; i++) {
+      const cols = linhas[i].split(delim).map(c => c.trim().replace(/^"|"$/g, ""));
+      if (cols.length < 2) continue;
+      const dataStr = cols[idx.data] || "";
+      const data = parseDataBR(dataStr);
+      if (!data) continue;
+
+      const descricao = (idx.desc >= 0 ? cols[idx.desc] : (cols[idx.data + 1] || ""))
+        || "Lançamento CSV";
+
+      let valor = 0, tipo = "";
+      if (idx.credito >= 0 && idx.debito >= 0) {
+        const cred = parseValorBR(cols[idx.credito]);
+        const deb  = parseValorBR(cols[idx.debito]);
+        if (cred && !deb) { valor = cred; tipo = "entrada"; }
+        else if (deb && !cred) { valor = deb; tipo = "saida"; }
+        else continue;
+      } else if (idx.valor >= 0) {
+        valor = parseValorBR(cols[idx.valor]);
+        if (valor === 0) continue;
+        tipo = valor < 0 ? "saida" : "entrada";
+      } else {
+        // Último recurso: assume última coluna como valor
+        valor = parseValorBR(cols[cols.length - 1]);
+        if (valor === 0) continue;
+        tipo = valor < 0 ? "saida" : "entrada";
+      }
+
+      out.push({
+        data,
+        descricao: descricao.trim(),
+        valor: Math.abs(valor),
+        tipo,
+      });
+    }
+    return out;
+  }
+
+  function parseDataBR(s) {
+    if (!s) return "";
+    s = s.trim();
+    // ISO YYYY-MM-DD
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    // BR DD/MM/YYYY ou DD/MM/YY
+    m = s.match(/^(\d{2})\/(\d{2})\/(\d{2,4})/);
+    if (m) {
+      let y = m[3];
+      if (y.length === 2) y = (parseInt(y) > 50 ? "19" : "20") + y;
+      return `${y}-${m[2]}-${m[1]}`;
+    }
+    // YYYYMMDD
+    m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    return "";
+  }
+
+  function parseValorBR(s) {
+    if (!s) return 0;
+    s = String(s).trim();
+    if (!s) return 0;
+    // Detecta negativo
+    const neg = /^-/.test(s) || /\(.*\)/.test(s);
+    s = s.replace(/[^\d,.\-]/g, "").replace(/^-/, "");
+    // BR: 1.234,56  ·  US: 1,234.56
+    // Se tem vírgula E ponto, vírgula geralmente é decimal (BR)
+    if (s.includes(",") && s.includes(".")) {
+      // Última ocorrência define o decimal
+      if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+        s = s.replace(/\./g, "").replace(",", ".");
+      } else {
+        s = s.replace(/,/g, "");
+      }
+    } else if (s.includes(",")) {
+      s = s.replace(",", ".");
+    }
+    const n = parseFloat(s);
+    if (isNaN(n)) return 0;
+    return neg ? -n : n;
+  }
+
+  /** PDF — extrai todo o texto via pdf.js e tenta detectar lançamentos
+   *  por regex (data + descrição + valor na mesma linha). Pra layouts
+   *  bagunçados, manda pra IA estruturar.
+   */
+  async function parsearPDF(file) {
+    if (!window.pdfjsLib) throw new Error("PDF.js não carregou");
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const linhasTexto = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const pg = await pdf.getPage(p);
+      const tc = await pg.getTextContent();
+      // Agrupa por linha (mesmo Y aprox)
+      const porLinha = {};
+      for (const item of tc.items) {
+        const y = Math.round(item.transform[5]);
+        if (!porLinha[y]) porLinha[y] = [];
+        porLinha[y].push({ x: item.transform[4], t: item.str });
+      }
+      // Ordena por Y descendente (topo→base no PDF) e dentro por X
+      Object.keys(porLinha).map(Number).sort((a, b) => b - a).forEach(y => {
+        porLinha[y].sort((a, b) => a.x - b.x);
+        const linha = porLinha[y].map(o => o.t).join(" ").replace(/\s+/g, " ").trim();
+        if (linha) linhasTexto.push(linha);
+      });
+    }
+
+    // Heurística direta — regex DATA descrição VALOR
+    const out = [];
+    const re = /^(\d{2}\/\d{2}\/\d{2,4})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})(?:\s*[CDcd])?\s*$/;
+    for (const linha of linhasTexto) {
+      const m = linha.match(re);
+      if (!m) continue;
+      const data = parseDataBR(m[1]);
+      const valor = parseValorBR(m[3]);
+      if (!data || valor === 0) continue;
+      out.push({
+        data,
+        descricao: m[2].trim(),
+        valor: Math.abs(valor),
+        tipo: valor < 0 ? "saida" : "entrada",
+      });
+    }
+
+    // Se regex direto não detectou nada, tenta via IA
+    if (out.length === 0 && linhasTexto.length > 0) {
+      try {
+        return await pedirIAExtrairExtrato(linhasTexto.join("\n"));
+      } catch (e) {
+        throw new Error("PDF sem padrão reconhecido. Tente exportar OFX ou CSV no app do banco.");
+      }
+    }
+    return out;
+  }
+
+  async function pedirIAExtrairExtrato(textoBruto) {
+    // Limita o texto a ~8000 caracteres pra não estourar tokens
+    const texto = textoBruto.slice(0, 8000);
+    const r = await apiPost("ia-chat", {
+      pergunta: "Abaixo está o texto bruto de um extrato bancário. Extraia TODOS os lançamentos em JSON array, formato: [{\"data\":\"YYYY-MM-DD\",\"descricao\":\"...\",\"valor\":1234.56,\"tipo\":\"entrada\"|\"saida\"}]. Use vírgula decimal não, use ponto. Responda APENAS o array JSON, sem markdown.\n\nTEXTO:\n" + texto,
+    });
+    let raw = (r.resposta || "").trim();
+    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return arr;
+    } catch (e) {}
+    return [];
+  }
+
+  // ===== TABELA DE REVISÃO =====
+
+  function renderTabelaExtrato() {
+    const tbody = $("#extrato-tabela-body");
+    const selecionados = imp.lancamentos.filter(l => l.selecionado).length;
+    const totRec = imp.lancamentos.filter(l => l.selecionado && l.tipo === "entrada").reduce((s, l) => s + l.valor, 0);
+    const totDes = imp.lancamentos.filter(l => l.selecionado && l.tipo === "saida").reduce((s, l) => s + l.valor, 0);
+
+    $("#importar-resumo").innerHTML =
+      `<strong>${imp.lancamentos.length}</strong> lançamentos detectados · ` +
+      `<strong>${selecionados}</strong> selecionado(s) pra importar<br>` +
+      `Totais: <span class="pos" style="font-weight:600">${fmtBRL(totRec)}</span> em entradas · ` +
+      `<span class="neg" style="font-weight:600">${fmtBRL(totDes)}</span> em saídas`;
+
+    tbody.innerHTML = imp.lancamentos.map((l, i) => {
+      const cats = l.tipo === "entrada"
+        ? ["Honorários", "Sucumbência", "Reembolsos", "Rendas / Aplicações", "Outros Recebimentos"]
+        : ["Despesas Fixas", "Folha (Salários)", "Impostos", "Contabilidade", "Despesas Viagens", "Despesas Carros", "Despesas Diversas", "Custas / Notificações", "Tarifas Bancárias", "Investimentos", "Retiradas (Pró-labore)", "Terreno CBA"];
+      const cat = l.categoria || (l.tipo === "entrada" ? "Outros Recebimentos" : "Despesas Diversas");
+      const optsCat = cats.map(c => `<option ${c === cat ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+      return `
+        <tr class="${l.selecionado ? "" : "linha-ignorada"}">
+          <td><input type="checkbox" class="extrato-check" data-i="${i}" ${l.selecionado ? "checked" : ""} /></td>
+          <td class="col-data">${fmtData(l.data)}</td>
+          <td><span class="pill ${l.tipo === "entrada" ? "pill-entrada" : "pill-saida"}">${l.tipo === "entrada" ? "↑" : "↓"}</span></td>
+          <td class="col-desc">
+            <input type="text" class="input-inline extrato-desc" data-i="${i}" value="${escapeHtml(l.descricao)}" />
+          </td>
+          <td>
+            <select class="input-inline extrato-cat" data-i="${i}">${optsCat}</select>
+          </td>
+          <td class="col-valor ${l.tipo === "entrada" ? "pos" : "neg"}" style="white-space:nowrap">${fmtBRL(l.valor)}</td>
+        </tr>`;
+    }).join("");
+
+    // Bind eventos
+    $$(".extrato-check").forEach(c => {
+      c.addEventListener("change", e => {
+        imp.lancamentos[parseInt(e.target.dataset.i)].selecionado = e.target.checked;
+        renderTabelaExtrato();
+      });
+    });
+    $$(".extrato-desc").forEach(inp => {
+      inp.addEventListener("input", e => {
+        imp.lancamentos[parseInt(e.target.dataset.i)].descricao = e.target.value;
+      });
+    });
+    $$(".extrato-cat").forEach(sel => {
+      sel.addEventListener("change", e => {
+        imp.lancamentos[parseInt(e.target.dataset.i)].categoria = e.target.value;
+      });
+    });
+  }
+
+  async function categorizarLote() {
+    const itens = imp.lancamentos.map(l => ({ descricao: l.descricao, tipo: l.tipo }));
+    const r = await apiPost("ia-categorizar-lote", { itens });
+    if (r.categorias && Array.isArray(r.categorias)) {
+      r.categorias.forEach((c, i) => {
+        if (imp.lancamentos[i] && c) imp.lancamentos[i].categoria = c;
+      });
+    }
+  }
+
+  // ===== IMPORTAR EM LOTE =====
+
+  async function importarLote() {
+    const aSelecionados = imp.lancamentos.filter(l => l.selecionado);
+    if (aSelecionados.length === 0) { toast("Nada marcado pra importar.", true); return; }
+
+    mostrarEtapaImport(3);
+    $("#importar-progresso").innerHTML = `<div class="spinner" style="margin:0 auto 12px"></div>Importando ${aSelecionados.length} lançamento(s)…`;
+
+    // Separar por aba (entradas / saídas)
+    const entradas = aSelecionados.filter(l => l.tipo === "entrada").map(l => ({
+      data: l.data, descricao: l.descricao, valor: l.valor, categoria: l.categoria,
+    }));
+    const saidas = aSelecionados.filter(l => l.tipo === "saida").map(l => ({
+      data: l.data, descricao: l.descricao, valor: l.valor, categoria: l.categoria,
+    }));
+
+    try {
+      let criados = 0;
+      if (entradas.length > 0) {
+        const r1 = await apiPost("criar-lote", { aba: "entradas", lancamentos: entradas });
+        criados += r1.criados || 0;
+      }
+      if (saidas.length > 0) {
+        const r2 = await apiPost("criar-lote", { aba: "saidas", lancamentos: saidas });
+        criados += r2.criados || 0;
+      }
+
+      $("#importar-progresso").innerHTML =
+        `<div style="font-size:42px; color:var(--pos); margin-bottom:14px">✓</div>` +
+        `<div style="font-size:16px; font-weight:600; margin-bottom:8px">Importação concluída</div>` +
+        `<div style="color:var(--ink-3); font-size:13px">${criados} lançamento(s) criado(s) na sua planilha.</div>`;
+
+      setTimeout(async () => {
+        fecharModalImportar();
+        await carregarTudo();
+        toast(`${criados} lançamento(s) importado(s).`);
+      }, 1600);
+    } catch (err) {
+      $("#importar-progresso").innerHTML =
+        `<div style="font-size:42px; color:var(--neg); margin-bottom:14px">✗</div>` +
+        `<div style="font-size:14px; color:var(--neg); margin-bottom:8px">Erro na importação</div>` +
+        `<div style="color:var(--ink-3); font-size:13px">${escapeHtml(err.message)}</div>` +
+        `<button class="btn btn-ghost" id="btn-importar-tentar-novamente" style="margin-top:18px">Voltar à revisão</button>`;
+      $("#btn-importar-tentar-novamente").addEventListener("click", () => mostrarEtapaImport(2));
+    }
+  }
+
+  function bindImportarEventos() {
+    $("#btn-importar-extrato").addEventListener("click", abrirModalImportar);
+    $("#btn-fechar-importar").addEventListener("click", fecharModalImportar);
+    $("#btn-importar-cancelar").addEventListener("click", fecharModalImportar);
+    $("#importar-modal").addEventListener("click", e => { if (e.target.id === "importar-modal") fecharModalImportar(); });
+
+    $("#extrato-input").addEventListener("change", e => escolherArquivoExtrato(e.target.files[0]));
+
+    // Drag-drop
+    const dz = $("#dropzone");
+    dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag-over"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("drag-over"));
+    dz.addEventListener("drop", e => {
+      e.preventDefault();
+      dz.classList.remove("drag-over");
+      if (e.dataTransfer.files[0]) escolherArquivoExtrato(e.dataTransfer.files[0]);
+    });
+
+    $("#btn-importar-avancar").addEventListener("click", () => {
+      if (imp.etapa === 1) processarExtrato();
+      else if (imp.etapa === 2) importarLote();
+    });
+    $("#btn-importar-voltar").addEventListener("click", () => mostrarEtapaImport(1));
+
+    $("#btn-importar-sel-todos").addEventListener("click", () => {
+      imp.lancamentos.forEach(l => l.selecionado = true);
+      renderTabelaExtrato();
+    });
+    $("#btn-importar-desel-todos").addEventListener("click", () => {
+      imp.lancamentos.forEach(l => l.selecionado = false);
+      renderTabelaExtrato();
+    });
+    $("#extrato-todos").addEventListener("change", e => {
+      imp.lancamentos.forEach(l => l.selecionado = e.target.checked);
+      renderTabelaExtrato();
+    });
+    $("#btn-importar-categorizar").addEventListener("click", async () => {
+      $("#importar-status").textContent = "Re-categorizando com IA…";
+      try {
+        await categorizarLote();
+        $("#importar-status").textContent = "✓ Categorias atualizadas.";
+        renderTabelaExtrato();
+      } catch (err) {
+        $("#importar-status").textContent = "Erro: " + err.message;
+      }
+    });
+  }
+
   // ====== EXPORT / RELATÓRIO ======
   function abrirModalRelatorio() {
     const arr = dadosFiltrados();
@@ -1396,6 +1899,7 @@
       renderMovimentacoes();
     });
     $("#btn-relatorio").addEventListener("click", abrirModalRelatorio);
+    bindImportarEventos();
     $("#btn-fechar-relatorio").addEventListener("click", fecharModalRelatorio);
     $("#btn-cancelar-relatorio").addEventListener("click", fecharModalRelatorio);
     $("#btn-baixar-relatorio").addEventListener("click", gerarRelatorio);
