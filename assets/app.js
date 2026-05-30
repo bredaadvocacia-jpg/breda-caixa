@@ -270,8 +270,10 @@
   // 1. Cache local (síncrono) → renderiza em <50ms
   // 2. Últimos 12 meses (rápido) → atualiza UI com dados recentes
   // 3. Histórico completo (background) → mescla por trás sem bloquear
-  const MESES_INICIAIS = 12;  // 1ª chamada pega só último ano — bem rápido
-  const HORIZON_HISTORICO_MS = 800;  // delay antes de buscar o histórico (deixa UI livre)
+  const MESES_INICIAIS = 3;   // 1ª chamada: só 3 meses recentes — RELÂMPAGO (~50KB)
+  const MESES_FASE2 = 12;     // 2ª chamada (background): expandir pra 12 meses
+  const HORIZON_FASE2_MS = 500;     // delay antes da fase 2 (deixa UI respirar)
+  const HORIZON_HISTORICO_MS = 1500;  // delay antes do histórico completo
 
   async function carregarTudo() {
     let temCache = false;
@@ -292,6 +294,9 @@
         }
       }
     } catch (e) {}
+
+    // Se NÃO tem cache, mostra skeleton imediatamente para evitar tela vazia
+    if (!temCache) mostrarSkeletonInicial();
 
     // ── FASE 2 · Buscar apenas últimos N meses (rápido — 1/10 do payload total) ──
     marcarRefreshAtivo(true);
@@ -322,7 +327,9 @@
         return;
       }
 
-      // ── FASE 3 · Histórico completo (background, não bloqueia UI) ──
+      // ── FASE 2.5 · Expandir pra 12 meses (background) ──
+      setTimeout(() => carregarMaisMeses(MESES_FASE2), HORIZON_FASE2_MS);
+      // ── FASE 3 · Histórico completo (background, mais tarde) ──
       setTimeout(() => carregarHistoricoCompleto(), HORIZON_HISTORICO_MS);
     } catch (err) {
       if (/senha|inválid|token|login/i.test(err.message)) {
@@ -350,6 +357,20 @@
     return antigos.concat(recentes);
   }
 
+  async function carregarMaisMeses(meses) {
+    try {
+      const r = await apiGet({ aba: "painel", meses: meses });
+      const entradasMais = r.entradas || [];
+      const saidasMais   = r.saidas   || [];
+      // Mescla preservando histórico antigo do cache que estiver fora da janela
+      state.entradas = mesclarLancamentos(state.entradas, entradasMais, meses);
+      state.saidas   = mesclarLancamentos(state.saidas,   saidasMais,   meses);
+      // Re-renderiza só se a aba ativa se beneficia (Análise / Movimentações)
+      if (state.abaAtiva === "movimentacoes") renderMovimentacoes();
+      if (state.abaAtiva === "analise") renderAnalise();
+    } catch (err) { /* silencioso */ }
+  }
+
   async function carregarHistoricoCompleto() {
     try {
       const r = await apiGet({ aba: "painel" });
@@ -365,6 +386,52 @@
       // silencioso — usuário já viu os dados recentes
     } finally {
       marcarRefreshAtivo(false);
+    }
+  }
+
+  /** Renderiza placeholders animados nos KPIs, alertas e resumo IA
+   *  enquanto a primeira carga acontece. Dá sensação de instantâneo. */
+  function mostrarSkeletonInicial() {
+    // KPIs em skeleton
+    const skelVal = `<div class="skel skel-line w-80" style="height:32px; margin-top:8px"></div>`;
+    const skelSub = `<div class="skel skel-line w-40" style="height:11px; margin-top:6px"></div>`;
+    ["stat-receita-mes", "stat-despesa-mes", "stat-saldo-mes", "stat-margem"].forEach(id => {
+      const el = $("#" + id);
+      if (el) el.innerHTML = "<span style='opacity:.35'>—</span>";
+    });
+    ["stat-receita-sub", "stat-despesa-sub", "stat-saldo-sub"].forEach(id => {
+      const el = $("#" + id);
+      if (el) el.innerHTML = `<span class="skel skel-line w-60" style="height:10px; display:inline-block"></span>`;
+    });
+    const periodo = $("#periodo-atual");
+    if (periodo) periodo.innerHTML = `<span class="skel skel-line w-60" style="height:10px; display:inline-block; min-width:80px"></span>`;
+
+    // Alertas em skeleton
+    const alertasEl = $("#alertas");
+    if (alertasEl) {
+      alertasEl.innerHTML = `
+        <div class="alert"><div style="flex:1">
+          <div class="skel skel-line w-60" style="height:11px; margin-bottom:6px"></div>
+          <div class="skel skel-line w-80" style="height:13px"></div>
+        </div></div>
+        <div class="alert"><div style="flex:1">
+          <div class="skel skel-line w-40" style="height:11px; margin-bottom:6px"></div>
+          <div class="skel skel-line w-80" style="height:13px"></div>
+        </div></div>
+      `;
+    }
+    const alertasMeta = $("#alertas-meta");
+    if (alertasMeta) alertasMeta.innerHTML = `<span class="skel skel-line w-40" style="height:10px; display:inline-block; min-width:50px"></span>`;
+
+    // Resumo IA em skeleton
+    const resumo = $("#resumo-ia");
+    if (resumo) {
+      resumo.innerHTML = `
+        <div class="skel skel-line w-80" style="height:14px; margin-bottom:8px"></div>
+        <div class="skel skel-line w-60" style="height:14px; margin-bottom:8px"></div>
+        <div class="skel skel-line w-80" style="height:14px; margin-bottom:8px"></div>
+        <div class="skel skel-line w-40" style="height:14px"></div>
+      `;
     }
   }
 

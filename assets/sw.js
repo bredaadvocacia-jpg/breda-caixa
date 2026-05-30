@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v19 (abertura turbo: carga em 2 fases + lazy load 1.3MB) */
-const CACHE = "caixa-breda-v19";
+/* Service Worker — Caixa Breda v20 (skeleton + 3 meses + cache server-side) */
+const CACHE = "caixa-breda-v20";
 const ASSETS = [
   "./",
   "./index.html",
