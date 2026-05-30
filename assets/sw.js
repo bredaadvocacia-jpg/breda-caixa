@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v18 (toggle: exigir login a cada abertura) */
-const CACHE = "caixa-breda-v18";
+/* Service Worker — Caixa Breda v19 (abertura turbo: carga em 2 fases + lazy load 1.3MB) */
+const CACHE = "caixa-breda-v19";
 const ASSETS = [
   "./",
   "./index.html",

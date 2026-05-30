@@ -7,6 +7,33 @@
   const LS_CACHE = "caixaBredaCache";
   const LS_SEMPRE_LOGIN = "caixaBredaSempreLogin";  // "1" = exige login a cada abertura
 
+  // ====== LAZY-LOAD DE BIBLIOTECAS PESADAS ======
+  // Chart.js, jsPDF e pdf.js são carregadas SÓ quando necessárias.
+  // Cache de Promise: cada URL é baixada uma única vez.
+  const _scriptsPromises = {};
+  function loadScript(src) {
+    if (_scriptsPromises[src]) return _scriptsPromises[src];
+    _scriptsPromises[src] = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => { delete _scriptsPromises[src]; reject(new Error("Falha ao carregar " + src)); };
+      document.head.appendChild(s);
+    });
+    return _scriptsPromises[src];
+  }
+  // Pré-carregar libs em background DEPOIS da app montar (idle)
+  function preloadLibsEmBackground() {
+    if (!window.requestIdleCallback) {
+      setTimeout(preloadLibsEmBackground, 3000);
+      return;
+    }
+    requestIdleCallback(() => {
+      loadScript("https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js").catch(() => {});
+    }, { timeout: 5000 });
+  }
+
   /**
    * Salva o cache no localStorage com fallback gradual: tenta TUDO; se estourar
    * a quota (~5MB no Chrome), vai cortando lançamentos antigos até caber.
@@ -239,14 +266,17 @@
     abrirLogin("Sessão encerrada.");
   }
 
-  // ====== CARREGAR DADOS — STALE-WHILE-REVALIDATE ======
-  // 1. Renderiza imediatamente do cache (instantâneo)
-  // 2. Em background, busca atualização da API
-  // 3. Re-renderiza só se vier dado novo
+  // ====== CARREGAR DADOS — 3 FASES PARA ABERTURA INSTANTÂNEA ======
+  // 1. Cache local (síncrono) → renderiza em <50ms
+  // 2. Últimos 12 meses (rápido) → atualiza UI com dados recentes
+  // 3. Histórico completo (background) → mescla por trás sem bloquear
+  const MESES_INICIAIS = 12;  // 1ª chamada pega só último ano — bem rápido
+  const HORIZON_HISTORICO_MS = 800;  // delay antes de buscar o histórico (deixa UI livre)
+
   async function carregarTudo() {
     let temCache = false;
 
-    // Tentativa 1: carregar do cache localStorage (síncrono, ~instantâneo)
+    // ── FASE 1 · Cache local (instantâneo) ──
     try {
       const c = localStorage.getItem(LS_CACHE);
       if (c) {
@@ -257,43 +287,82 @@
           temCache = true;
           popularFiltros();
           renderTodasAbas();
-          renderIADoCache();  // mostra resumo/alertas cacheados
+          renderIADoCache();
           if (state.abaAtiva === "analise") carregarPrevisao();
         }
       }
     } catch (e) {}
 
-    // Tentativa 2 (background): buscar dados atualizados da API
+    // ── FASE 2 · Buscar apenas últimos N meses (rápido — 1/10 do payload total) ──
     marcarRefreshAtivo(true);
+    let recebeuParcial = false;
     try {
-      const r = await apiGet({ aba: "painel" });
-      const entradasNovas = r.entradas || [];
-      const saidasNovas   = r.saidas || [];
+      const r = await apiGet({ aba: "painel", meses: MESES_INICIAIS });
+      const entradasRec = r.entradas || [];
+      const saidasRec   = r.saidas   || [];
+      const totalE = r.totalEntradas || entradasRec.length;
+      const totalS = r.totalSaidas   || saidasRec.length;
 
-      // Detecta se algo mudou (qtd de lançamentos é proxy rápido)
-      const mudou = entradasNovas.length !== state.entradas.length
-                  || saidasNovas.length   !== state.saidas.length;
+      // Atualiza estado com dados recentes (sem perder cache do histórico)
+      // Mescla: substituí entradas/saidas dos meses que vieram, mantém anteriores do cache
+      state.entradas = mesclarLancamentos(state.entradas, entradasRec, MESES_INICIAIS);
+      state.saidas   = mesclarLancamentos(state.saidas,   saidasRec,   MESES_INICIAIS);
+      recebeuParcial = true;
 
-      state.entradas = entradasNovas;
-      state.saidas   = saidasNovas;
-      salvarCacheSeguro(state.entradas, state.saidas);
-
-      if (mudou || !temCache) {
-        popularFiltros();
-        renderTodasAbas();
-      }
-      state._previsaoLoaded = false;
+      popularFiltros();
+      renderTodasAbas();
       carregarIA();
       if (state.abaAtiva === "analise") carregarPrevisao();
+
+      // Se o cache cobre o histórico completo, não precisa nem buscar de novo
+      const precisaBuscarHistorico = (state.entradas.length < totalE) || (state.saidas.length < totalS);
+      if (!precisaBuscarHistorico) {
+        salvarCacheSeguro(state.entradas, state.saidas);
+        marcarRefreshAtivo(false);
+        return;
+      }
+
+      // ── FASE 3 · Histórico completo (background, não bloqueia UI) ──
+      setTimeout(() => carregarHistoricoCompleto(), HORIZON_HISTORICO_MS);
     } catch (err) {
       if (/senha|inválid|token|login/i.test(err.message)) {
         abrirLogin(err.message);
         marcarRefreshAtivo(false);
         return;
       }
-      // Se já tinha cache na tela, não bloqueia — só avisa discretamente
-      if (temCache) toast("Sem conexão — exibindo dados em cache.", false);
-      else toast(err.message, true);
+      if (temCache) {
+        toast("Sem conexão — exibindo dados em cache.", false);
+        marcarRefreshAtivo(false);
+      } else {
+        toast(err.message, true);
+        marcarRefreshAtivo(false);
+      }
+    }
+  }
+
+  /** Mescla lançamentos recentes (autoritativos) com cache (preserva o resto).
+   *  Lógica: remove do cache tudo nos últimos N meses, anexa os recentes. */
+  function mesclarLancamentos(cache, recentes, mesesCorte) {
+    const hoje = new Date();
+    const corte = hoje.getFullYear() * 12 + (hoje.getMonth() + 1) - mesesCorte;
+    const dentroDoCorte = (x) => (x.ano || 0) * 12 + (x.mes || 0) >= corte;
+    const antigos = (cache || []).filter(x => !dentroDoCorte(x));
+    return antigos.concat(recentes);
+  }
+
+  async function carregarHistoricoCompleto() {
+    try {
+      const r = await apiGet({ aba: "painel" });
+      state.entradas = r.entradas || [];
+      state.saidas   = r.saidas   || [];
+      salvarCacheSeguro(state.entradas, state.saidas);
+      popularFiltros();
+      // Re-renderiza só se a aba ativa precisa de histórico (Análise)
+      if (state.abaAtiva === "analise") renderAnalise();
+      // Movimentações também pode precisar se o usuário filtrou ano anterior
+      if (state.abaAtiva === "movimentacoes") renderMovimentacoes();
+    } catch (err) {
+      // silencioso — usuário já viu os dados recentes
     } finally {
       marcarRefreshAtivo(false);
     }
@@ -646,7 +715,7 @@
     sel.value = state.anoAnalise;
   }
 
-  function renderAnalise() {
+  async function renderAnalise() {
     const ano = state.anoAnalise;
     const e = state.entradas.filter(x => x.ano === ano && x.categoria !== "Saldo Mês Anterior");
     const s = state.saidas.filter(x => x.ano === ano);
@@ -656,10 +725,18 @@
     e.forEach(x => x.mes >= 1 && x.mes <= 12 && (rec[x.mes-1] += x.valor || 0));
     s.forEach(x => x.mes >= 1 && x.mes <= 12 && (des[x.mes-1] += x.valor || 0));
 
-    renderRxD(rec, des);
-    renderSaldoChart(rec, des);
-    renderTopCharts(e, s);
+    // Tabela mensal não precisa de Chart.js — renderiza imediato
     renderTabelaMensal(rec, des);
+
+    // Gráficos: carrega Chart.js sob demanda
+    try {
+      await loadScript("https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js");
+      renderRxD(rec, des);
+      renderSaldoChart(rec, des);
+      renderTopCharts(e, s);
+    } catch (err) {
+      console.warn("Chart.js não carregou:", err);
+    }
   }
 
   const destroy = (k) => { if (state.charts[k]) { state.charts[k].destroy(); state.charts[k] = null; } };
@@ -1369,6 +1446,17 @@
    *  bagunçados, manda pra IA estruturar.
    */
   async function parsearPDF(file) {
+    // Lazy-load pdf.js (~600KB) só agora — quando o usuário escolheu PDF de fato
+    if (!window.pdfjsLib) {
+      try {
+        await loadScript("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js");
+        if (window.pdfjsLib) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        }
+      } catch (err) {
+        throw new Error("Falha ao carregar leitor de PDF. Verifique conexão.");
+      }
+    }
     if (!window.pdfjsLib) throw new Error("PDF.js não carregou");
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -1734,7 +1822,15 @@
     return `${slug}-${new Date().toISOString().slice(0, 10)}.${ext}`;
   }
 
-  function exportarPDF(opts) {
+  async function exportarPDF(opts) {
+    toast("Preparando PDF…");
+    try {
+      await loadScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+      await loadScript("https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.0/dist/jspdf.plugin.autotable.min.js");
+    } catch (err) {
+      toast("Falha ao carregar lib PDF. Verifique sua conexão.", true);
+      return;
+    }
     if (!window.jspdf || !window.jspdf.jsPDF) {
       toast("Biblioteca PDF não carregou. Recarregue a página.", true);
       return;
@@ -2195,6 +2291,8 @@
 
     if (!state.apiUrl || !state.token) { abrirLogin(); return; }
     carregarTudo();
+    // Pré-carrega Chart.js quando o navegador estiver ocioso (não bloqueia)
+    preloadLibsEmBackground();
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./assets/sw.js").then((reg) => {

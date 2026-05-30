@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@300;400;500;600;700;800&family=Spectral:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preload" href="./assets/app.js" as="script" />
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
@@ -785,15 +786,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.0/dist/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-<script>
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
-  }
-</script>
+<!-- Bibliotecas pesadas (Chart.js, jsPDF, pdf.js) são carregadas SOB DEMANDA pelo app.js
+     usando window.loadScript(). Reduz ~1.3MB do carregamento inicial. -->
 <script src="./assets/app.js"></script>
 </body>
 </html>
