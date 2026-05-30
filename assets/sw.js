@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v15 (filtro de período no modal de relatório) */
-const CACHE = "caixa-breda-v15";
+/* Service Worker — Caixa Breda v16 (Heritage Aegis: azul + verde + nova logo) */
+const CACHE = "caixa-breda-v16";
 const ASSETS = [
   "./",
   "./index.html",
