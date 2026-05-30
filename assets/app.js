@@ -1514,12 +1514,56 @@
     const arr = dadosFiltrados();
     if (!arr.length) { toast("Nenhum lançamento nos filtros atuais.", true); return; }
 
+    // Pré-preenche período do modal com o range atual dos dados filtrados
+    const datas = arr.map(x => x.data).filter(Boolean).sort();
+    $("#relatorio-data-de").value = state.filtroDataDe || (datas.length ? datas[0] : "");
+    $("#relatorio-data-ate").value = state.filtroDataAte || (datas.length ? datas[datas.length - 1] : "");
+
+    atualizarResumoRelatorio();
+    aplicarSugestoesTitulo();
+    $("#relatorio-modal").classList.add("open");
+  }
+
+  function aplicarSugestoesTitulo() {
+    if (state.filtroBusca) {
+      $("#relatorio-titulo").value = `Movimentações ${state.filtroBusca.toUpperCase()} — Histórico filtrado`;
+    } else if (state.filtroCategoria) {
+      $("#relatorio-titulo").value = `Movimentações — ${state.filtroCategoria}`;
+    } else {
+      $("#relatorio-titulo").value = "Movimentações do escritório";
+    }
+    const de = $("#relatorio-data-de").value;
+    const ate = $("#relatorio-data-ate").value;
+    if (de || ate) {
+      $("#relatorio-subtitulo").value = `${de ? fmtData(de) : "início"} a ${ate ? fmtData(ate) : "hoje"}`;
+    } else {
+      const arr = dadosParaRelatorio();
+      const datas = arr.map(x => x.data).filter(Boolean).sort();
+      $("#relatorio-subtitulo").value = datas.length ? `${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}` : "";
+    }
+  }
+
+  /** Dados que vão pro relatório: parte dos filtros da tabela, aplica também
+   *  o filtro de período do modal (se preenchido). */
+  function dadosParaRelatorio() {
+    let arr = dadosFiltrados();
+    const de = $("#relatorio-data-de") ? $("#relatorio-data-de").value : "";
+    const ate = $("#relatorio-data-ate") ? $("#relatorio-data-ate").value : "";
+    if (de) arr = arr.filter(x => (x.data || "") >= de);
+    if (ate) arr = arr.filter(x => (x.data || "") <= ate);
+    return arr;
+  }
+
+  function atualizarResumoRelatorio() {
+    const arr = dadosParaRelatorio();
     const partes = [];
     if (state.filtroBusca) partes.push(`busca: "${state.filtroBusca}"`);
     if (state.filtroCategoria) partes.push(`categoria: ${state.filtroCategoria}`);
     if (state.filtroAno) partes.push(`ano: ${state.filtroAno}`);
     if (state.filtroMes) partes.push(`mês: ${MESES_PT[state.filtroMes - 1]}`);
-    if (state.filtroDataDe || state.filtroDataAte) partes.push(`período: ${state.filtroDataDe || "início"} → ${state.filtroDataAte || "hoje"}`);
+    const de = $("#relatorio-data-de").value;
+    const ate = $("#relatorio-data-ate").value;
+    if (de || ate) partes.push(`período: ${de ? fmtData(de) : "início"} → ${ate ? fmtData(ate) : "hoje"}`);
     const tipos = [];
     if (state.filtroTipos.entrada) tipos.push("entradas");
     if (state.filtroTipos.saida) tipos.push("saídas");
@@ -1533,24 +1577,44 @@
       `Filtros: <em>${partes.join(" · ") || "nenhum (todo o histórico)"}</em><br>` +
       `Totais: <span class="pos" style="font-weight:600">${fmtBRL(totRec)}</span> em entradas · ` +
       `<span class="neg" style="font-weight:600">${fmtBRL(totDes)}</span> em saídas`;
+  }
 
-    if (state.filtroBusca) {
-      $("#relatorio-titulo").value = `Movimentações ${state.filtroBusca.toUpperCase()} — Histórico filtrado`;
-    } else if (state.filtroCategoria) {
-      $("#relatorio-titulo").value = `Movimentações — ${state.filtroCategoria}`;
-    } else {
-      $("#relatorio-titulo").value = "Movimentações do escritório";
+  function aplicarPresetRelatorio(preset) {
+    const hoje = new Date();
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    let de = "", ate = "";
+    if (preset === "mes-atual") {
+      de = fmt(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+      ate = fmt(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+    } else if (preset === "mes-anterior") {
+      de = fmt(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+      ate = fmt(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+    } else if (preset === "3m") {
+      const ini = new Date(hoje); ini.setMonth(ini.getMonth() - 3);
+      de = fmt(ini); ate = fmt(hoje);
+    } else if (preset === "12m") {
+      const ini = new Date(hoje); ini.setMonth(ini.getMonth() - 12);
+      de = fmt(ini); ate = fmt(hoje);
+    } else if (preset === "ano-atual") {
+      de = `${hoje.getFullYear()}-01-01`;
+      ate = `${hoje.getFullYear()}-12-31`;
+    } else if (preset === "tudo") {
+      de = ""; ate = "";
     }
-
-    const datas = arr.map(x => x.data).filter(Boolean).sort();
-    $("#relatorio-subtitulo").value = datas.length ? `${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}` : "";
-
-    $("#relatorio-modal").classList.add("open");
+    $("#relatorio-data-de").value = de;
+    $("#relatorio-data-ate").value = ate;
+    atualizarResumoRelatorio();
+    aplicarSugestoesTitulo();
   }
 
   function fecharModalRelatorio() { $("#relatorio-modal").classList.remove("open"); }
 
   function gerarRelatorio() {
+    const arr = dadosParaRelatorio();
+    if (!arr.length) {
+      toast("Nenhum lançamento no período selecionado.", true);
+      return;
+    }
     const formato = (document.querySelector('input[name="formato"]:checked') || {}).value || "pdf";
     const titulo = $("#relatorio-titulo").value.trim() || "Relatório de Movimentações";
     const subtitulo = $("#relatorio-subtitulo").value.trim();
@@ -1561,7 +1625,7 @@
   }
 
   function exportarCSV(titulo) {
-    const arr = dadosFiltrados();
+    const arr = dadosParaRelatorio();
     const cols = ["data","_t","descricao","valor","categoria","ano","mes"];
     const head = ["data","tipo","descricao","valor","categoria","ano","mes"].join(";");
     const rows = arr.map(x => cols.map(c => {
@@ -1591,7 +1655,7 @@
       return;
     }
     const { jsPDF } = window.jspdf;
-    const arr = dadosFiltrados().slice().sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+    const arr = dadosParaRelatorio().slice().sort((a, b) => (a.data || "").localeCompare(b.data || ""));
     const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
@@ -1904,6 +1968,19 @@
     $("#btn-cancelar-relatorio").addEventListener("click", fecharModalRelatorio);
     $("#btn-baixar-relatorio").addEventListener("click", gerarRelatorio);
     $("#relatorio-modal").addEventListener("click", e => { if (e.target.id === "relatorio-modal") fecharModalRelatorio(); });
+
+    // Filtro de período próprio do modal de relatório
+    $("#relatorio-data-de").addEventListener("change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
+    $("#relatorio-data-ate").addEventListener("change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
+    $("#btn-relatorio-data-limpar").addEventListener("click", () => {
+      $("#relatorio-data-de").value = "";
+      $("#relatorio-data-ate").value = "";
+      atualizarResumoRelatorio();
+      aplicarSugestoesTitulo();
+    });
+    $$(".btn-rel-preset").forEach(btn => {
+      btn.addEventListener("click", () => aplicarPresetRelatorio(btn.dataset.preset));
+    });
 
     // Período (range de datas)
     $("#filtro-data-de").addEventListener("change", e => { state.filtroDataDe = e.target.value; renderMovimentacoes(); });

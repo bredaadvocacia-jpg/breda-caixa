@@ -691,6 +691,32 @@
       </div>
 
       <div class="field">
+        <label style="margin-bottom:8px">Filtrar por período (opcional)</label>
+        <div style="display:flex; gap:10px; align-items:center">
+          <div style="flex:1">
+            <small style="font-size:10px; color:var(--ink-3); letter-spacing:.5px; font-weight:600">DE</small>
+            <input id="relatorio-data-de" type="date" />
+          </div>
+          <div style="flex:1">
+            <small style="font-size:10px; color:var(--ink-3); letter-spacing:.5px; font-weight:600">ATÉ</small>
+            <input id="relatorio-data-ate" type="date" />
+          </div>
+          <button type="button" class="btn btn-ghost" id="btn-relatorio-data-limpar" style="padding:6px 10px; font-size:11px; align-self:flex-end; margin-bottom:0">Limpar</button>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="mes-atual" style="padding:4px 10px; font-size:11px">Mês atual</button>
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="mes-anterior" style="padding:4px 10px; font-size:11px">Mês anterior</button>
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="3m" style="padding:4px 10px; font-size:11px">Últ. 3 meses</button>
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="12m" style="padding:4px 10px; font-size:11px">Últ. 12 meses</button>
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="ano-atual" style="padding:4px 10px; font-size:11px">Este ano</button>
+          <button type="button" class="btn btn-ghost btn-rel-preset" data-preset="tudo" style="padding:4px 10px; font-size:11px">Tudo</button>
+        </div>
+        <small style="display:block; color:var(--ink-4); font-size:11px; margin-top:6px">
+          Os campos vêm pré-preenchidos com o período dos lançamentos filtrados na tabela. Ajuste aqui sem alterar a tabela.
+        </small>
+      </div>
+
+      <div class="field">
         <label style="margin-bottom:8px">Formato</label>
         <div style="display:flex; gap:8px">
           <label class="radio-card">

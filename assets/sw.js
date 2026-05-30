@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v14 (importar extrato OFX/CSV/PDF) */
-const CACHE = "caixa-breda-v14";
+/* Service Worker — Caixa Breda v15 (filtro de período no modal de relatório) */
+const CACHE = "caixa-breda-v15";
 const ASSETS = [
   "./",
   "./index.html",
