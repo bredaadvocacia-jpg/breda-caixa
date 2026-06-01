@@ -1270,7 +1270,13 @@
     $("#btn-importar-voltar").style.display = n === 2 ? "inline-block" : "none";
     $("#btn-importar-avancar").style.display = n === 3 ? "none" : "inline-block";
     if (n === 1) $("#btn-importar-avancar").textContent = "Avançar →";
-    if (n === 2) $("#btn-importar-avancar").textContent = "Importar selecionados";
+    if (n === 2) {
+      $("#btn-importar-avancar").textContent = "Importar selecionados";
+      // Reabilita o botão: processarExtrato() o deixou disabled durante o
+      // processamento e nunca reabilitava no caminho de sucesso (bug que
+      // travava o clique em "Importar selecionados").
+      $("#btn-importar-avancar").disabled = false;
+    }
   }
 
   function escolherArquivoExtrato(file) {
@@ -1434,7 +1440,7 @@
       const data = parseDataBR(dataStr);
       if (!data) continue;
 
-      const descricao = (idx.desc >= 0 ? cols[idx.desc] : (cols[idx.data + 1] || ""))
+      let descricao = (idx.desc >= 0 ? cols[idx.desc] : (cols[idx.data + 1] || ""))
         || "Lançamento CSV";
 
       let valor = 0, tipo = "";
@@ -1449,8 +1455,18 @@
         if (valor === 0) continue;
         tipo = valor < 0 ? "saida" : "entrada";
       } else {
-        // Último recurso: assume última coluna como valor
-        valor = parseValorBR(cols[cols.length - 1]);
+        // Sem coluna de valor explícita. Muitos extratos (ex.: Sicredi) trazem
+        // só uma coluna de SALDO acumulado e embutem o valor real no FIM da
+        // descrição, ex.: "RESG/VENCO CDB 1261462 55.000,00" ou "IOF ... -20,64".
+        // Preferimos extrair o valor do fim da descrição (e o tiramos do texto);
+        // só caímos na última coluna se não houver número monetário na descrição.
+        const ext = extrairValorDaDescricao(descricao);
+        if (ext.valor !== 0) {
+          valor = ext.valor;
+          descricao = ext.descricao;
+        } else {
+          valor = parseValorBR(cols[cols.length - 1]);
+        }
         if (valor === 0) continue;
         tipo = valor < 0 ? "saida" : "entrada";
       }
@@ -1506,6 +1522,21 @@
     const n = parseFloat(s);
     if (isNaN(n)) return 0;
     return neg ? -n : n;
+  }
+
+  /** Extrai o ÚLTIMO valor monetário do FIM de uma descrição (formato BR), com
+   *  sinal opcional, e devolve a descrição sem esse valor.
+   *  Ex.: "RESG/VENCO CDB 1261462 55.000,00" -> { valor: 55000, descricao: "RESG/VENCO CDB 1261462" }
+   *       "IOF S/ UTILIZACAO LIMITE 4102474 -20,64" -> { valor: -20.64, descricao: "IOF S/ UTILIZACAO LIMITE 4102474" }
+   *  Exige 2 casas decimais com vírgula para evitar pegar número de documento por engano. */
+  function extrairValorDaDescricao(desc) {
+    if (!desc) return { valor: 0, descricao: desc };
+    const m = String(desc).match(/(-?\s*\d{1,3}(?:\.\d{3})*,\d{2}|-?\s*\d+,\d{2})\s*$/);
+    if (!m) return { valor: 0, descricao: desc };
+    const valor = parseValorBR(m[1]);
+    if (valor === 0) return { valor: 0, descricao: desc };
+    const limpa = desc.slice(0, m.index).trim();
+    return { valor: valor, descricao: limpa || desc };
   }
 
   /** PDF — extrai todo o texto via pdf.js e tenta detectar lançamentos

@@ -611,22 +611,10 @@
       <div id="extrato-arquivo-info" style="display:none; margin-top:14px; padding:12px 14px; background:var(--surface-2); border-radius:8px; font-size:13px"></div>
 
       <div class="field" style="margin-top:18px">
-        <label>Os lançamentos detectados serão criados como:</label>
-        <div style="display:flex; gap:8px">
-          <label class="radio-card" style="flex:1">
-            <input type="radio" name="extrato-aba" value="saidas" checked />
-            <div class="radio-card-body">
-              <div class="radio-card-icon">↓</div>
-              <div>
-                <div class="radio-card-title">Saídas (despesas)</div>
-                <div class="radio-card-desc">Use pra extratos de conta corrente — vou separar entradas e saídas individualmente.</div>
-              </div>
-            </div>
-          </label>
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:12px 14px; background:var(--accent-bg); border-radius:8px; font-size:12px; color:var(--ink-3); line-height:1.5">
+          <span style="font-size:16px; line-height:1">⇅</span>
+          <span>O app identifica <strong>automaticamente</strong> cada lançamento do extrato: <strong>crédito → entrada (receita)</strong> e <strong>débito → saída (despesa)</strong>. Você confere tudo na próxima tela antes de confirmar.</span>
         </div>
-        <small style="color:var(--ink-4); font-size:11px; margin-top:6px; display:block">
-          O app detecta automaticamente o tipo de cada linha (crédito = entrada, débito = saída).
-        </small>
       </div>
     </div>
 
