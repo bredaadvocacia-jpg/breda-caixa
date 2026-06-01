@@ -6,6 +6,7 @@
   const LS_TOK = "caixaBredaToken";
   const LS_CACHE = "caixaBredaCache";
   const LS_SEMPRE_LOGIN = "caixaBredaSempreLogin";  // "1" = exige login a cada abertura
+  const LS_PATRIMONIO = "caixaBredaPatrimonioBase"; // valor base do patrimônio (por dispositivo)
 
   // ====== LAZY-LOAD DE BIBLIOTECAS PESADAS ======
   // Chart.js, jsPDF e pdf.js são carregadas SÓ quando necessárias.
@@ -93,6 +94,8 @@
     anexosPendentes: [],
     charts: {},
     chatHistorico: [],
+    patrimonioVisivel: false,   // SEMPRE começa escondido a cada abertura do app
+    _saldoMesAtual: 0,          // saldo do mês mais recente (preenchido em renderInsights)
   };
 
   // ====== HELPERS ======
@@ -686,6 +689,56 @@
     $("#stat-receita-sub").innerHTML = comparativo(recMes, recAnt, mAnt);
     $("#stat-despesa-sub").innerHTML = comparativo(desMes, desAnt, mAnt, true);
     $("#stat-saldo-sub").innerHTML = comparativo(saldoMes, recAnt - desAnt, mAnt);
+
+    // Patrimônio = valor base (manual) + saldo do mês mais recente
+    state._saldoMesAtual = saldoMes;
+    renderPatrimonio();
+  }
+
+  // ====== PATRIMÔNIO (base manual + saldo do mês, com olho de privacidade) ======
+  function getPatrimonioBase() {
+    const v = parseFloat(localStorage.getItem(LS_PATRIMONIO));
+    return isNaN(v) ? 0 : v;
+  }
+
+  function renderPatrimonio() {
+    const elValor = $("#stat-patrimonio");
+    if (!elValor) return;
+    const elSub = $("#stat-patrimonio-sub");
+    const elOlho = $("#btn-patrimonio-olho");
+    const base = getPatrimonioBase();
+    const saldo = state._saldoMesAtual || 0;
+    const total = base + saldo;
+    if (state.patrimonioVisivel) {
+      elValor.textContent = fmtBRL(total);
+      elValor.className = "stat-value " + (total >= 0 ? "pos" : "neg");
+      if (elSub) elSub.textContent = "base " + fmtBRL(base) + " + mês " + fmtBRL(saldo);
+      if (elOlho) elOlho.textContent = "🙈";
+    } else {
+      elValor.textContent = "R$ ••••••";
+      elValor.className = "stat-value";
+      if (elSub) elSub.textContent = "toque no 👁 para mostrar";
+      if (elOlho) elOlho.textContent = "👁";
+    }
+  }
+
+  function togglePatrimonio() {
+    state.patrimonioVisivel = !state.patrimonioVisivel;
+    renderPatrimonio();
+  }
+
+  function editarPatrimonioBase() {
+    const atual = getPatrimonioBase();
+    const entrada = prompt(
+      "Valor base do Patrimônio (R$).\nEx.: 50000  ou  50.000,00\n\nO app soma a este valor o saldo do mês atual.",
+      atual ? String(atual).replace(".", ",") : ""
+    );
+    if (entrada === null) return;  // cancelou
+    const valor = parseValorBR(entrada);
+    localStorage.setItem(LS_PATRIMONIO, String(valor));
+    state.patrimonioVisivel = true;  // ao editar, já mostra o resultado
+    renderPatrimonio();
+    toast("Patrimônio base atualizado.");
   }
 
   function comparativo(v, ant, mAnt, invertColor) {
@@ -2344,6 +2397,12 @@
 
     // Chat
     $("#chat-send").addEventListener("click", chatEnviar);
+
+    // Patrimônio: olho (mostrar/ocultar) e editar valor base
+    const btnOlho = $("#btn-patrimonio-olho");
+    if (btnOlho) btnOlho.addEventListener("click", togglePatrimonio);
+    const btnEditPat = $("#btn-patrimonio-editar");
+    if (btnEditPat) btnEditPat.addEventListener("click", editarPatrimonioBase);
     $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter") chatEnviar(); });
 
     // Login 2FA

@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v21 (fix botão importar + parser CSV valor-na-descrição) */
-const CACHE = "caixa-breda-v21";
+/* Service Worker — Caixa Breda v22 (cartão Patrimônio com olho de privacidade) */
+const CACHE = "caixa-breda-v22";
 const ASSETS = [
   "./",
   "./index.html",
