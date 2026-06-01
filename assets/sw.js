@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v22 (cartão Patrimônio com olho de privacidade) */
-const CACHE = "caixa-breda-v22";
+/* Service Worker — Caixa Breda v23 (ícone de olho fechado/aberto no Patrimônio) */
+const CACHE = "caixa-breda-v23";
 const ASSETS = [
   "./",
   "./index.html",

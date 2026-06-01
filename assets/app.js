@@ -696,6 +696,15 @@
   }
 
   // ====== PATRIMÔNIO (base manual + saldo do mês, com olho de privacidade) ======
+  // Ícones SVG: olho FECHADO (riscado) quando escondido · olho ABERTO quando visível.
+  const SVG_OLHO_FECHADO =
+    '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>' +
+    '<line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  const SVG_OLHO_ABERTO =
+    '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
   function getPatrimonioBase() {
     const v = parseFloat(localStorage.getItem(LS_PATRIMONIO));
     return isNaN(v) ? 0 : v;
@@ -713,12 +722,12 @@
       elValor.textContent = fmtBRL(total);
       elValor.className = "stat-value " + (total >= 0 ? "pos" : "neg");
       if (elSub) elSub.textContent = "base " + fmtBRL(base) + " + mês " + fmtBRL(saldo);
-      if (elOlho) elOlho.textContent = "🙈";
+      if (elOlho) { elOlho.innerHTML = SVG_OLHO_ABERTO; elOlho.title = "Ocultar patrimônio"; }
     } else {
       elValor.textContent = "R$ ••••••";
       elValor.className = "stat-value";
-      if (elSub) elSub.textContent = "toque no 👁 para mostrar";
-      if (elOlho) elOlho.textContent = "👁";
+      if (elSub) elSub.textContent = "toque no olho para mostrar";
+      if (elOlho) { elOlho.innerHTML = SVG_OLHO_FECHADO; elOlho.title = "Mostrar patrimônio"; }
     }
   }
 
