@@ -2,10 +2,12 @@
 (function () {
   "use strict";
 
-  const LS_URL = "caixaBredaApiUrl";
-  const LS_TOK = "caixaBredaToken";
-  const LS_CACHE = "caixaBredaCache";
-  const LS_SEMPRE_LOGIN = "caixaBredaSempreLogin";  // "1" = exige login a cada abertura
+  const LS_URL         = "caixaBredaApiUrl";
+  const LS_TOK         = "caixaBredaToken";
+  const LS_CACHE       = "caixaBredaCache";
+  const LS_SESSION_TS  = "caixaBredaSessionTs";  // timestamp do login (ms)
+  const LS_PATRIMONIO  = "caixaBredaPatrimonioBase";
+  const SESSION_TTL_MS = 60 * 60 * 1000;         // sessão cliente: 1 hora
 
   // ====== LAZY-LOAD DE BIBLIOTECAS PESADAS ======
   // Chart.js, jsPDF e pdf.js são carregadas SÓ quando necessárias.
@@ -41,35 +43,25 @@
    *
    * Níveis: completo → últimos 24 meses → 12 meses → 6 meses → desliga cache.
    */
-  function salvarCacheSeguro(entradas, saidas) {
-    const niveis = [null, 24, 12, 6];  // null = sem corte (tenta tudo)
+  function salvarCacheSeguro(extratos) {
+    const niveis = [null, 24, 12, 6];
     const agora = new Date();
     for (let i = 0; i < niveis.length; i++) {
       const meses = niveis[i];
-      let e = entradas, s = saidas;
+      let ex = extratos;
       if (meses != null) {
         const corte = agora.getFullYear() * 12 + (agora.getMonth() + 1) - meses;
-        const dentroDoCorte = (x) => x.ano && x.mes && (x.ano * 12 + x.mes) >= corte;
-        e = entradas.filter(dentroDoCorte);
-        s = saidas.filter(dentroDoCorte);
+        ex = extratos.filter(x => x.ano && x.mes && (x.ano * 12 + x.mes) >= corte);
       }
-      const payload = {
-        ts: Date.now(),
-        e, s,
-        cacheParcial: meses != null,
-        mesesCache: meses,
-      };
+      const payload = { ts: Date.now(), ex, cacheParcial: meses != null, mesesCache: meses };
       try {
         localStorage.setItem(LS_CACHE, JSON.stringify(payload));
         return { ok: true, parcial: meses != null, meses };
       } catch (err) {
-        // quota excedida — tenta corte mais agressivo
         if (err && /quota|exceed/i.test(err.message || err.name)) continue;
-        // outro erro — desiste silenciosamente
         return { ok: false, erro: err.message };
       }
     }
-    // Não coube nem com 6 meses — limpa cache antigo e segue sem cache
     try { localStorage.removeItem(LS_CACHE); } catch (e) {}
     return { ok: false, erro: "quota excedida em todos os níveis" };
   }
@@ -79,20 +71,16 @@
   const state = {
     apiUrl: localStorage.getItem(LS_URL) || "",
     token: localStorage.getItem(LS_TOK) || "",
-    entradas: [],
-    saidas: [],
-    abaAtiva: location.hash.replace("#", "") || "insights",
-    filtroAno: null,
-    filtroMes: null,
-    filtroCategoria: null,
-    filtroBusca: "",
-    filtroTipos: { entrada: true, saida: true },
-    filtroDataDe: "",
-    filtroDataAte: "",
+    extratos: [],          // fonte de verdade — extrato bancário importado
+    resumoContas: [],      // [{conta, creditos, debitos, saldo, pendentes}]
+    totalConsolidado: { creditos: 0, debitos: 0, saldo: 0 },
+    abaAtiva: location.hash.replace("#", "") || "contas",
+    // filtros da aba Extratos
+    extFiltro: { conta: "", ano: null, mes: null, status: "", busca: "", dataDe: "", dataAte: "", categoria: null },
     anoAnalise: new Date().getFullYear(),
-    anexosPendentes: [],
     charts: {},
     chatHistorico: [],
+    _previsaoLoaded: false,
   };
 
   // ====== HELPERS ======
@@ -187,10 +175,24 @@
       });
       const data = await r.json();
       if (!data.ok) throw new Error(data.erro || "Erro");
-      state._codeId = data.codeId;
       localStorage.setItem(LS_URL, url);
+
+      // ── Fast login: servidor retornou token direto (dentro da janela de 1h) ──
+      if (data.fastLogin && data.token) {
+        state.token = data.token;
+        localStorage.setItem(LS_TOK, data.token);
+        localStorage.setItem(LS_SESSION_TS, String(Date.now()));
+        state._loginSenha = null;
+        state._codeId = null;
+        fecharLogin();
+        carregarTudo();
+        return;
+      }
+
+      // ── Login normal: aguarda código por e-mail ──
+      state._codeId = data.codeId;
       setLoginStep(2);
-      msg.textContent = "Código enviado para " + (state._emailMascarado || "seu e-mail") + ". Verifique a caixa de entrada.";
+      msg.textContent = "Código enviado para o seu e-mail. Verifique a caixa de entrada.";
       $("#login-codigo").focus();
     } catch (err) {
       msg.textContent = "❌ " + err.message;
@@ -225,6 +227,7 @@
       if (!data.ok) throw new Error(data.erro || "Erro");
       state.token = data.token;
       localStorage.setItem(LS_TOK, data.token);
+      localStorage.setItem(LS_SESSION_TS, String(Date.now()));
       state._loginSenha = null;
       state._codeId = null;
       fecharLogin();
@@ -262,7 +265,8 @@
     localStorage.removeItem("caixaBredaIA_resumo");
     localStorage.removeItem("caixaBredaIA_alertas");
     state.token = "";
-    state.entradas = []; state.saidas = [];
+    state.extratos = []; state.resumoContas = [];
+    state.totalConsolidado = { creditos: 0, debitos: 0, saldo: 0 };
     abrirLogin("Sessão encerrada.");
   }
 
@@ -283,11 +287,11 @@
       const c = localStorage.getItem(LS_CACHE);
       if (c) {
         const d = JSON.parse(c);
-        if (d.e && d.s) {
-          state.entradas = d.e || [];
-          state.saidas = d.s || [];
+        if (d.ex) {
+          state.extratos = d.ex || [];
+          _aplicarResumoContas(state.extratos);
           temCache = true;
-          popularFiltros();
+          popularFiltrosExtratos();
           renderTodasAbas();
           renderIADoCache();
           if (state.abaAtiva === "analise") carregarPrevisao();
@@ -295,41 +299,21 @@
       }
     } catch (e) {}
 
-    // Se NÃO tem cache, mostra skeleton imediatamente para evitar tela vazia
     if (!temCache) mostrarSkeletonInicial();
 
-    // ── FASE 2 · Buscar apenas últimos N meses (rápido — 1/10 do payload total) ──
     marcarRefreshAtivo(true);
-    let recebeuParcial = false;
     try {
-      const r = await apiGet({ aba: "painel", meses: MESES_INICIAIS });
-      const entradasRec = r.entradas || [];
-      const saidasRec   = r.saidas   || [];
-      const totalE = r.totalEntradas || entradasRec.length;
-      const totalS = r.totalSaidas   || saidasRec.length;
+      const r = await apiGet({ aba: "painel-extrato", meses: MESES_INICIAIS });
+      const extRec = r.dados || [];
+      state.extratos     = mesclarExtrato(state.extratos, extRec, MESES_INICIAIS);
+      state.resumoContas = r.contas || [];
+      state.totalConsolidado = r.total || { creditos: 0, debitos: 0, saldo: 0 };
 
-      // Atualiza estado com dados recentes (sem perder cache do histórico)
-      // Mescla: substituí entradas/saidas dos meses que vieram, mantém anteriores do cache
-      state.entradas = mesclarLancamentos(state.entradas, entradasRec, MESES_INICIAIS);
-      state.saidas   = mesclarLancamentos(state.saidas,   saidasRec,   MESES_INICIAIS);
-      recebeuParcial = true;
-
-      popularFiltros();
+      popularFiltrosExtratos();
       renderTodasAbas();
       carregarIA();
       if (state.abaAtiva === "analise") carregarPrevisao();
 
-      // Se o cache cobre o histórico completo, não precisa nem buscar de novo
-      const precisaBuscarHistorico = (state.entradas.length < totalE) || (state.saidas.length < totalS);
-      if (!precisaBuscarHistorico) {
-        salvarCacheSeguro(state.entradas, state.saidas);
-        marcarRefreshAtivo(false);
-        return;
-      }
-
-      // ── FASE 2.5 · Expandir pra 12 meses (background) ──
-      setTimeout(() => carregarMaisMeses(MESES_FASE2), HORIZON_FASE2_MS);
-      // ── FASE 3 · Histórico completo (background, mais tarde) ──
       setTimeout(() => carregarHistoricoCompleto(), HORIZON_HISTORICO_MS);
     } catch (err) {
       if (/senha|inválid|token|login/i.test(err.message)) {
@@ -337,19 +321,29 @@
         marcarRefreshAtivo(false);
         return;
       }
-      if (temCache) {
-        toast("Sem conexão — exibindo dados em cache.", false);
-        marcarRefreshAtivo(false);
-      } else {
-        toast(err.message, true);
-        marcarRefreshAtivo(false);
-      }
+      if (temCache) toast("Sem conexão — exibindo dados em cache.", false);
+      else toast(err.message, true);
+      marcarRefreshAtivo(false);
     }
   }
 
-  /** Mescla lançamentos recentes (autoritativos) com cache (preserva o resto).
-   *  Lógica: remove do cache tudo nos últimos N meses, anexa os recentes. */
-  function mesclarLancamentos(cache, recentes, mesesCorte) {
+  function _aplicarResumoContas(extratos) {
+    const map = {};
+    extratos.forEach(r => {
+      const c = r.conta || "—";
+      if (!map[c]) map[c] = { conta: c, creditos: 0, debitos: 0, saldo: 0, pendentes: 0 };
+      const v = r.valor || 0;
+      if (r.tipo === "credito") { map[c].creditos += v; map[c].saldo += v; }
+      else                      { map[c].debitos  += v; map[c].saldo -= v; }
+      if (r.status === "pendente") map[c].pendentes++;
+    });
+    state.resumoContas = Object.values(map);
+    state.totalConsolidado = state.resumoContas.reduce((acc, c) => {
+      acc.creditos += c.creditos; acc.debitos += c.debitos; acc.saldo += c.saldo; return acc;
+    }, { creditos: 0, debitos: 0, saldo: 0 });
+  }
+
+  function mesclarExtrato(cache, recentes, mesesCorte) {
     const hoje = new Date();
     const corte = hoje.getFullYear() * 12 + (hoje.getMonth() + 1) - mesesCorte;
     const dentroDoCorte = (x) => (x.ano || 0) * 12 + (x.mes || 0) >= corte;
@@ -357,31 +351,16 @@
     return antigos.concat(recentes);
   }
 
-  async function carregarMaisMeses(meses) {
-    try {
-      const r = await apiGet({ aba: "painel", meses: meses });
-      const entradasMais = r.entradas || [];
-      const saidasMais   = r.saidas   || [];
-      // Mescla preservando histórico antigo do cache que estiver fora da janela
-      state.entradas = mesclarLancamentos(state.entradas, entradasMais, meses);
-      state.saidas   = mesclarLancamentos(state.saidas,   saidasMais,   meses);
-      // Re-renderiza só se a aba ativa se beneficia (Análise / Movimentações)
-      if (state.abaAtiva === "movimentacoes") renderMovimentacoes();
-      if (state.abaAtiva === "analise") renderAnalise();
-    } catch (err) { /* silencioso */ }
-  }
-
   async function carregarHistoricoCompleto() {
     try {
-      const r = await apiGet({ aba: "painel" });
-      state.entradas = r.entradas || [];
-      state.saidas   = r.saidas   || [];
-      salvarCacheSeguro(state.entradas, state.saidas);
-      popularFiltros();
-      // Re-renderiza só se a aba ativa precisa de histórico (Análise)
+      const r = await apiGet({ aba: "painel-extrato" });
+      state.extratos         = r.dados  || [];
+      state.resumoContas     = r.contas || [];
+      state.totalConsolidado = r.total  || { creditos: 0, debitos: 0, saldo: 0 };
+      salvarCacheSeguro(state.extratos);
+      popularFiltrosExtratos();
       if (state.abaAtiva === "analise") renderAnalise();
-      // Movimentações também pode precisar se o usuário filtrou ano anterior
-      if (state.abaAtiva === "movimentacoes") renderMovimentacoes();
+      if (state.abaAtiva === "extratos") renderExtratos();
     } catch (err) {
       // silencioso — usuário já viu os dados recentes
     } finally {
@@ -392,19 +371,18 @@
   /** Renderiza placeholders animados nos KPIs, alertas e resumo IA
    *  enquanto a primeira carga acontece. Dá sensação de instantâneo. */
   function mostrarSkeletonInicial() {
-    // KPIs em skeleton
-    const skelVal = `<div class="skel skel-line w-80" style="height:32px; margin-top:8px"></div>`;
-    const skelSub = `<div class="skel skel-line w-40" style="height:11px; margin-top:6px"></div>`;
-    ["stat-receita-mes", "stat-despesa-mes", "stat-saldo-mes", "stat-margem"].forEach(id => {
-      const el = $("#" + id);
-      if (el) el.innerHTML = "<span style='opacity:.35'>—</span>";
+    // Cards de conta em skeleton
+    const grid = $("#contas-cards");
+    if (grid) {
+      grid.innerHTML = `
+        <div class="conta-card-skel"><div class="skel skel-line" style="height:96px; border-radius:10px"></div></div>
+        <div class="conta-card-skel"><div class="skel skel-line" style="height:96px; border-radius:10px"></div></div>
+      `;
+    }
+    // KPIs consolidados em skeleton
+    ["stat-creditos-total","stat-debitos-total","stat-saldo-total","stat-pendentes"].forEach(id => {
+      const el = $("#" + id); if (el) el.innerHTML = "<span style='opacity:.35'>—</span>";
     });
-    ["stat-receita-sub", "stat-despesa-sub", "stat-saldo-sub"].forEach(id => {
-      const el = $("#" + id);
-      if (el) el.innerHTML = `<span class="skel skel-line w-60" style="height:10px; display:inline-block"></span>`;
-    });
-    const periodo = $("#periodo-atual");
-    if (periodo) periodo.innerHTML = `<span class="skel skel-line w-60" style="height:10px; display:inline-block; min-width:80px"></span>`;
 
     // Alertas em skeleton
     const alertasEl = $("#alertas");
@@ -627,65 +605,135 @@
     state.abaAtiva = name;
     location.hash = name;
     $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
-    $$("[data-tab-content]").forEach(el => el.hidden = el.dataset.tabContent !== name);
+    $$("[data-tab-content]").forEach(el => {
+      el.hidden = el.dataset.tabContent !== name;
+    });
     if (name === "analise") {
       popularSelectAno();
       renderAnalise();
-      if (!state._previsaoLoaded) carregarPrevisao();  // a função só marca _previsaoLoaded em caso de sucesso
+      if (!state._previsaoLoaded) carregarPrevisao();
     }
+    if (name === "extratos") renderExtratos();
+    if (name === "contas")   renderContas();
   }
 
   // ====== RENDER ======
   function renderTodasAbas() {
-    renderInsights();
-    renderMovimentacoes();
+    renderContas();
+    renderExtratos();
     if (state.abaAtiva === "analise") renderAnalise();
   }
 
-  function renderInsights() {
-    // Pega o último mês com dados reais — se o mês corrente está vazio, exibe o anterior.
-    const todosMeses = state.entradas.concat(state.saidas)
-      .filter(x => x.ano && x.mes && x.categoria !== "Saldo Mês Anterior")
-      .map(x => x.ano * 100 + x.mes);
-    let yAtual, mAtual;
-    if (todosMeses.length > 0) {
-      const maxYM = Math.max.apply(null, todosMeses);
-      yAtual = Math.floor(maxYM / 100);
-      mAtual = maxYM % 100;
-    } else {
-      const now = new Date();
-      yAtual = now.getFullYear();
-      mAtual = now.getMonth() + 1;
+  // ====== ABA CONTAS ======
+  function renderContas() {
+    const contas = state.resumoContas;
+    const total  = state.totalConsolidado;
+
+    // Cards por banco
+    const grid = $("#contas-cards");
+    if (grid) {
+      if (!contas.length) {
+        grid.innerHTML = `<div style="padding:32px 0; text-align:center; color:var(--ink-3); font-size:13px; grid-column:1/-1">
+          <div style="font-size:32px; margin-bottom:10px">🏦</div>
+          Nenhum extrato importado ainda.<br>Clique em <strong>📥 Importar extrato</strong> para começar.
+        </div>`;
+      } else {
+        grid.innerHTML = contas.map(c => {
+          const pendBadge = c.pendentes > 0
+            ? `<span class="conta-card-badge pending">${c.pendentes} pendente${c.pendentes > 1 ? "s" : ""}</span>`
+            : `<span class="conta-card-badge ok">✓ ok</span>`;
+          return `<div class="conta-card">
+            ${pendBadge}
+            <div class="conta-card-nome">${escapeHtml(c.conta)}</div>
+            <div class="conta-card-saldo">${fmtBRL(c.saldo)}</div>
+            <div class="conta-card-row">
+              <span>Créditos <strong class="pos">${fmtBRLk(c.creditos)}</strong></span>
+              <span>Débitos <strong class="neg">${fmtBRLk(c.debitos)}</strong></span>
+            </div>
+          </div>`;
+        }).join("");
+      }
     }
-    const mAnt = mAtual === 1 ? 12 : mAtual - 1;
-    const yAnt = mAtual === 1 ? yAtual - 1 : yAtual;
 
-    const sumMes = (arr, y, m) => arr.filter(x => x.ano === y && x.mes === m && x.categoria !== "Saldo Mês Anterior")
-      .reduce((s, x) => s + (x.valor || 0), 0);
+    // Consolidado
+    const el = (id, v) => { const e = $("#" + id); if (e) e.textContent = v; };
+    el("stat-creditos-total", fmtBRL(total.creditos));
+    el("stat-debitos-total",  fmtBRL(total.debitos));
+    const saldoEl = $("#stat-saldo-total");
+    if (saldoEl) { saldoEl.textContent = fmtBRL(total.saldo); saldoEl.className = "stat-value " + (total.saldo >= 0 ? "pos" : "neg"); }
+    const totalPend = contas.reduce((s, c) => s + c.pendentes, 0);
+    const pendEl = $("#stat-pendentes");
+    if (pendEl) { pendEl.textContent = totalPend; pendEl.className = "stat-value " + (totalPend === 0 ? "pos" : "warn"); }
 
-    const recMes = sumMes(state.entradas, yAtual, mAtual);
-    const desMes = sumMes(state.saidas, yAtual, mAtual);
-    const recAnt = sumMes(state.entradas, yAnt, mAnt);
-    const desAnt = sumMes(state.saidas, yAnt, mAnt);
-    const saldoMes = recMes - desMes;
-    const margem = recMes > 0 ? (saldoMes / recMes) * 100 : 0;
+    const subCred = $("#stat-creditos-sub");
+    if (subCred && contas.length) {
+      const agora = new Date();
+      const mesAtual = contas[0]; // pode ser aprimorado
+      subCred.textContent = `${MESES_PT[agora.getMonth()]} ${agora.getFullYear()}`;
+    }
 
-    // Indica se está mostrando o mês mais recente (não o calendário atual)
-    const now = new Date();
-    const calendarioYM = now.getFullYear() * 100 + (now.getMonth() + 1);
-    const dataYM = yAtual * 100 + mAtual;
-    const sufixo = dataYM < calendarioYM ? " · último mês com lançamentos" : "";
-    $("#periodo-atual").textContent = `${MESES_PT[mAtual-1]} ${yAtual}${sufixo}`;
-    $("#stat-receita-mes").textContent = fmtBRL(recMes);
-    $("#stat-despesa-mes").textContent = fmtBRL(desMes);
-    $("#stat-saldo-mes").textContent = fmtBRL(saldoMes);
-    $("#stat-saldo-mes").className = "stat-value " + (saldoMes >= 0 ? "pos" : "neg");
-    $("#stat-margem").textContent = margem.toFixed(1) + "%";
-    $("#stat-margem").className = "stat-value " + (margem >= 0 ? "pos" : "neg");
+    const periodoEl = $("#contas-periodo");
+    if (periodoEl) {
+      const agora = new Date();
+      periodoEl.textContent = contas.length
+        ? `saldo apurado pelo extrato importado · ${MESES_PT[agora.getMonth()]} ${agora.getFullYear()}`
+        : "importe extratos OFX ou CSV do Inter e Bradesco";
+    }
+  }
 
-    $("#stat-receita-sub").innerHTML = comparativo(recMes, recAnt, mAnt);
-    $("#stat-despesa-sub").innerHTML = comparativo(desMes, desAnt, mAnt, true);
-    $("#stat-saldo-sub").innerHTML = comparativo(saldoMes, recAnt - desAnt, mAnt);
+  // ====== PATRIMÔNIO (base manual + saldo do mês, com olho de privacidade) ======
+  // Ícones SVG: olho FECHADO (riscado) quando escondido · olho ABERTO quando visível.
+  const SVG_OLHO_FECHADO =
+    '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>' +
+    '<line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  const SVG_OLHO_ABERTO =
+    '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+  function getPatrimonioBase() {
+    const v = parseFloat(localStorage.getItem(LS_PATRIMONIO));
+    return isNaN(v) ? 0 : v;
+  }
+
+  function renderPatrimonio() {
+    const elValor = $("#stat-patrimonio");
+    if (!elValor) return;
+    const elSub = $("#stat-patrimonio-sub");
+    const elOlho = $("#btn-patrimonio-olho");
+    const base = getPatrimonioBase();
+    const saldo = state._saldoMesAtual || 0;
+    const total = base + saldo;
+    if (state.patrimonioVisivel) {
+      elValor.textContent = fmtBRL(total);
+      elValor.className = "stat-value " + (total >= 0 ? "pos" : "neg");
+      if (elSub) elSub.textContent = "base " + fmtBRL(base) + " + mês " + fmtBRL(saldo);
+      if (elOlho) { elOlho.innerHTML = SVG_OLHO_ABERTO; elOlho.title = "Ocultar patrimônio"; }
+    } else {
+      elValor.textContent = "R$ ••••••";
+      elValor.className = "stat-value";
+      if (elSub) elSub.textContent = "toque no olho para mostrar";
+      if (elOlho) { elOlho.innerHTML = SVG_OLHO_FECHADO; elOlho.title = "Mostrar patrimônio"; }
+    }
+  }
+
+  function togglePatrimonio() {
+    state.patrimonioVisivel = !state.patrimonioVisivel;
+    renderPatrimonio();
+  }
+
+  function editarPatrimonioBase() {
+    const atual = getPatrimonioBase();
+    const entrada = prompt(
+      "Valor base do Patrimônio (R$).\nEx.: 50000  ou  50.000,00\n\nO app soma a este valor o saldo do mês atual.",
+      atual ? String(atual).replace(".", ",") : ""
+    );
+    if (entrada === null) return;  // cancelou
+    const valor = parseValorBR(entrada);
+    localStorage.setItem(LS_PATRIMONIO, String(valor));
+    state.patrimonioVisivel = true;  // ao editar, já mostra o resultado
+    renderPatrimonio();
+    toast("Patrimônio base atualizado.");
   }
 
   function comparativo(v, ant, mAnt, invertColor) {
@@ -698,99 +746,143 @@
   }
 
   // ====== MOVIMENTAÇÕES ======
-  function popularFiltros() {
-    const todos = state.entradas.concat(state.saidas);
-    const anos = Array.from(new Set(todos.map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
-    const selAno = $("#filtro-ano");
-    selAno.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a => `<option value="${a}">${a}</option>`).join("");
-    const selMes = $("#filtro-mes");
-    selMes.innerHTML = '<option value="">Todos os meses</option>' + MESES_PT.map((n,i) => `<option value="${i+1}">${n}</option>`).join("");
-    if (state.filtroAno) selAno.value = state.filtroAno;
-    if (state.filtroMes) selMes.value = state.filtroMes;
+  function popularFiltrosExtratos() {
+    const anos = Array.from(new Set(state.extratos.map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
+    const selAno = $("#ext-filtro-ano");
+    if (selAno) selAno.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a => `<option value="${a}">${a}</option>`).join("");
+    const selMes = $("#ext-filtro-mes");
+    if (selMes) selMes.innerHTML = '<option value="">Todos os meses</option>' + MESES_PT.map((n,i) => `<option value="${i+1}">${n}</option>`).join("");
+    // Popularizar o select de ano da Análise também
+    popularSelectAno();
   }
 
-  function dadosFiltrados() {
-    let arr = [];
-    if (state.filtroTipos.entrada) arr = arr.concat(state.entradas.map(x => Object.assign({_t: "entrada"}, x)));
-    if (state.filtroTipos.saida) arr = arr.concat(state.saidas.map(x => Object.assign({_t: "saida"}, x)));
-    if (state.filtroAno) arr = arr.filter(x => x.ano == state.filtroAno);
-    if (state.filtroMes) arr = arr.filter(x => x.mes == state.filtroMes);
-    if (state.filtroCategoria) arr = arr.filter(x => x.categoria === state.filtroCategoria);
-    if (state.filtroBusca) {
-      const q = state.filtroBusca.toLowerCase();
-      arr = arr.filter(x => (x.descricao || "").toLowerCase().includes(q));
+  // Compatibilidade com modal de relatório — usa extDadosFiltrados
+  function dadosFiltrados() { return extDadosFiltrados(); }
+
+  function extDadosFiltrados() {
+    const f = state.extFiltro;
+    let arr = state.extratos.slice();
+    if (f.conta)      arr = arr.filter(x => x.conta === f.conta);
+    if (f.ano)        arr = arr.filter(x => x.ano == f.ano);
+    if (f.mes)        arr = arr.filter(x => x.mes == f.mes);
+    if (f.status)     arr = arr.filter(x => x.status === f.status);
+    if (f.categoria)  arr = arr.filter(x => x.categoria === f.categoria);
+    if (f.dataDe)     arr = arr.filter(x => (x.data || "") >= f.dataDe);
+    if (f.dataAte)    arr = arr.filter(x => (x.data || "") <= f.dataAte);
+    if (f.busca) {
+      const q = f.busca.toLowerCase();
+      arr = arr.filter(x => (x.descricao || "").toLowerCase().includes(q) || (x.categoria || "").toLowerCase().includes(q) || (x.conta || "").toLowerCase().includes(q));
     }
-    // Range de datas (ISO YYYY-MM-DD) — string compare funciona
-    if (state.filtroDataDe) arr = arr.filter(x => (x.data || "") >= state.filtroDataDe);
-    if (state.filtroDataAte) arr = arr.filter(x => (x.data || "") <= state.filtroDataAte);
-    return arr;
+    return arr.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   }
 
-  function renderMovimentacoes() {
-    // Chips: tipos (já estão no HTML, só atualizar visual)
-    $$(".chip[data-tipo]").forEach(btn => {
-      btn.classList.toggle("active", !!state.filtroTipos[btn.dataset.tipo]);
-    });
+  function renderExtratos() {
+    const filtrados = extDadosFiltrados();
 
     // Chips de categoria
-    const filtrados = dadosFiltrados();
-    const cats = Array.from(new Set([...state.entradas, ...state.saidas].map(x => x.categoria))).sort();
-    const wrap = $("#chips-categorias");
-    wrap.innerHTML = cats.map(c => `<button class="chip ${state.filtroCategoria === c ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("");
-    $$(".chip[data-cat]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.filtroCategoria = state.filtroCategoria === btn.dataset.cat ? null : btn.dataset.cat;
-        renderMovimentacoes();
-      });
-    });
-
-    // Tabela
-    const ordenados = filtrados.slice().sort((a,b) => (b.data || "0").localeCompare(a.data || "0"));
-    const tbody = $("#tabela-body");
-    if (ordenados.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><h3>Sem lançamentos</h3><p>Ajuste os filtros ou crie um novo.</p></div></td></tr>`;
-    } else {
-      tbody.innerHTML = ordenados.slice(0, 500).map(x => {
-        const tem = Array.isArray(x.anexos) && x.anexos.length;
-        const clip = tem ? `<span class="clip-icon">📎 ${x.anexos.length}</span>` : "";
-        const isEntrada = x._t === "entrada";
-        return `
-          <tr data-id="${escapeHtml(x.id)}" data-tipo="${x._t}">
-            <td class="col-data">${fmtData(x.data)}</td>
-            <td><span class="pill ${isEntrada ? 'pill-entrada' : 'pill-saida'}">${isEntrada ? "↑" : "↓"}</span></td>
-            <td class="col-desc">${escapeHtml(x.descricao)} ${clip}</td>
-            <td><span class="pill">${escapeHtml(x.categoria || "—")}</span></td>
-            <td class="col-valor ${isEntrada ? 'pos' : 'neg'}">${isEntrada ? "+" : "−"} ${fmtBRL(x.valor)}</td>
-          </tr>`;
-      }).join("");
-      $$("#tabela-body tr").forEach(tr => {
-        tr.addEventListener("click", () => abrirModalEdicao(tr.dataset.id, tr.dataset.tipo));
+    const cats = Array.from(new Set(state.extratos.map(x => x.categoria).filter(Boolean))).sort();
+    const wrapCat = $("#ext-chips-categorias");
+    if (wrapCat) {
+      wrapCat.innerHTML = cats.map(c =>
+        `<button class="chip ${state.extFiltro.categoria === c ? "active" : ""}" data-extcat="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+      ).join("");
+      $$(".chip[data-extcat]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.extFiltro.categoria = state.extFiltro.categoria === btn.dataset.extcat ? null : btn.dataset.extcat;
+          renderExtratos();
+        });
       });
     }
 
-    const totRec = ordenados.filter(x => x._t === "entrada").reduce((s,x) => s + (x.valor || 0), 0);
-    const totDes = ordenados.filter(x => x._t === "saida").reduce((s,x) => s + (x.valor || 0), 0);
-    $("#tabela-meta").innerHTML = `${ordenados.length} lançamento${ordenados.length===1?"":"s"} · <span class="pos">${fmtBRL(totRec)}</span> em entradas · <span class="neg">${fmtBRL(totDes)}</span> em saídas${ordenados.length > 500 ? " · exibindo 500 mais recentes" : ""}`;
+    // Tabela
+    const tbody = $("#ext-tabela-body");
+    if (!tbody) return;
+    const CATS_CRED = ["Honorários","Sucumbência","Reembolsos","Rendas / Aplicações","Outros Recebimentos"];
+    const CATS_DEB  = ["Despesas Fixas","Folha (Salários)","Impostos","Contabilidade","Despesas Viagens","Despesas Carros","Despesas Diversas","Custas / Notificações","Tarifas Bancárias","Investimentos","Retiradas (Pró-labore)","Terreno CBA"];
+
+    if (!filtrados.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><h3>Sem extratos</h3><p>Importe um extrato OFX ou CSV do Inter ou Bradesco.</p></div></td></tr>`;
+    } else {
+      tbody.innerHTML = filtrados.slice(0, 500).map(x => {
+        const isCred = x.tipo === "credito";
+        const cats = isCred ? CATS_CRED : CATS_DEB;
+        const catSel = `<select class="ext-cat-sel" data-id="${escapeHtml(x.id)}" style="border:none; background:transparent; font-size:11px; max-width:140px; color:var(--ink-2); cursor:pointer">
+          ${cats.map(c => `<option value="${escapeHtml(c)}" ${x.categoria === c ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
+          ${!x.categoria ? `<option value="" selected disabled>— categoria —</option>` : ""}
+        </select>`;
+        const statusCls = x.status || "pendente";
+        return `<tr>
+          <td class="col-data">${fmtData(x.data)}</td>
+          <td style="font-size:11px; color:var(--ink-3)">${escapeHtml(x.conta || "—")}</td>
+          <td><span class="pill ${isCred ? "pill-entrada" : "pill-saida"}">${isCred ? "↑" : "↓"}</span></td>
+          <td class="col-desc">${escapeHtml(x.descricao || "")}</td>
+          <td>${catSel}</td>
+          <td class="col-valor ${isCred ? "pos" : "neg"}">${isCred ? "+" : "−"} ${fmtBRL(x.valor)}</td>
+          <td style="text-align:center"><span class="ext-status ${statusCls}" data-id="${escapeHtml(x.id)}" data-status="${statusCls}">${statusCls}</span></td>
+          <td></td>
+        </tr>`;
+      }).join("");
+
+      // Bind: mudar categoria inline
+      $$(".ext-cat-sel").forEach(sel => {
+        sel.addEventListener("change", async () => {
+          const id = sel.dataset.id;
+          const cat = sel.value;
+          const item = state.extratos.find(x => x.id === id);
+          if (!item) return;
+          item.categoria = cat;
+          if (item.status === "pendente") item.status = "ok";
+          try {
+            await apiPost("extrato-editar", { id, categoria: cat, status: "ok" });
+            _aplicarResumoContas(state.extratos);
+            renderContas();
+            renderExtratos();
+          } catch (err) { toast("Erro ao salvar: " + err.message, true); }
+        });
+      });
+
+      // Bind: ciclar status ao clicar no badge
+      $$(".ext-status").forEach(badge => {
+        badge.addEventListener("click", async () => {
+          const id = badge.dataset.id;
+          const item = state.extratos.find(x => x.id === id);
+          if (!item) return;
+          const ciclo = { pendente: "ok", ok: "ignorar", ignorar: "pendente" };
+          item.status = ciclo[item.status] || "pendente";
+          try {
+            await apiPost("extrato-editar", { id, status: item.status });
+            _aplicarResumoContas(state.extratos);
+            renderContas();
+            renderExtratos();
+          } catch (err) { toast("Erro ao salvar: " + err.message, true); }
+        });
+      });
+    }
+
+    const totCred = filtrados.filter(x => x.tipo === "credito").reduce((s,x) => s+(x.valor||0), 0);
+    const totDeb  = filtrados.filter(x => x.tipo === "debito").reduce((s,x) => s+(x.valor||0), 0);
+    const metaEl = $("#ext-tabela-meta");
+    if (metaEl) metaEl.innerHTML = `${filtrados.length} transações · <span class="pos">+${fmtBRL(totCred)}</span> · <span class="neg">−${fmtBRL(totDeb)}</span>${filtrados.length > 500 ? " · exibindo 500 mais recentes" : ""}`;
   }
 
   // ====== ANÁLISE ======
   function popularSelectAno() {
-    const anos = Array.from(new Set([...state.entradas, ...state.saidas].map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
+    const anos = Array.from(new Set(state.extratos.map(x => x.ano).filter(Boolean))).sort((a,b) => b-a);
     const sel = $("#ano-analise");
+    if (!sel) return;
     sel.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join("");
-    if (!anos.includes(state.anoAnalise)) state.anoAnalise = anos[0];
+    if (!anos.includes(state.anoAnalise) && anos.length) state.anoAnalise = anos[0];
     sel.value = state.anoAnalise;
   }
 
   async function renderAnalise() {
     const ano = state.anoAnalise;
-    const e = state.entradas.filter(x => x.ano === ano && x.categoria !== "Saldo Mês Anterior");
-    const s = state.saidas.filter(x => x.ano === ano);
+    const extAno = state.extratos.filter(x => x.ano === ano && x.status !== "ignorar");
 
     const rec = new Array(12).fill(0);
     const des = new Array(12).fill(0);
-    e.forEach(x => x.mes >= 1 && x.mes <= 12 && (rec[x.mes-1] += x.valor || 0));
-    s.forEach(x => x.mes >= 1 && x.mes <= 12 && (des[x.mes-1] += x.valor || 0));
+    extAno.filter(x => x.tipo === "credito").forEach(x => x.mes >= 1 && x.mes <= 12 && (rec[x.mes-1] += x.valor || 0));
+    extAno.filter(x => x.tipo === "debito" ).forEach(x => x.mes >= 1 && x.mes <= 12 && (des[x.mes-1] += x.valor || 0));
 
     // Tabela mensal não precisa de Chart.js — renderiza imediato
     renderTabelaMensal(rec, des);
@@ -800,7 +892,7 @@
       await loadScript("https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js");
       renderRxD(rec, des);
       renderSaldoChart(rec, des);
-      renderTopCharts(e, s);
+      renderTopCharts(extAno);
     } catch (err) {
       console.warn("Chart.js não carregou:", err);
     }
@@ -846,11 +938,13 @@
     });
   }
 
-  function renderTopCharts(e, s) {
+  function renderTopCharts(extAno) {
     const top = (arr, n=10) => {
-      const b = {}; arr.forEach(x => { b[x.categoria] = (b[x.categoria] || 0) + (x.valor || 0); });
+      const b = {}; arr.forEach(x => { b[x.categoria || "—"] = (b[x.categoria || "—"] || 0) + (x.valor || 0); });
       return Object.entries(b).sort((a,b) => b[1]-a[1]).slice(0,n);
     };
+    const s = extAno.filter(x => x.tipo === "debito");
+    const e = extAno.filter(x => x.tipo === "credito");
     const topS = top(s, 10); const topE = top(e, 10);
     destroy("topS"); destroy("topE");
     state.charts.topS = new Chart($("#chart-top-saidas").getContext("2d"), {
@@ -1098,8 +1192,7 @@
   // ====== DRAWER + TROCAR SENHA ======
   async function abrirDrawer() {
     $("#drawer-url").value = state.apiUrl;
-    // Reflete o estado atual do toggle de segurança
-    $("#toggle-sempre-login").checked = localStorage.getItem(LS_SEMPRE_LOGIN) === "1";
+    // (toggle de "sempre login" removido — sessão agora é fixa de 1h)
     $("#drawer").classList.add("open");
     $("#drawer-backdrop").classList.add("open");
     try {
@@ -1241,12 +1334,17 @@
     arquivo: null,
     lancamentos: [],   // [{data, descricao, valor, tipo, categoria, selecionado}, ...]
     etapa: 1,
+    modoExtrato: false,   // true = salvar na aba Extrato (conciliação); false = lançamento normal
+    contaExtrato: "",     // "Inter" | "Bradesco"
   };
 
-  function abrirModalImportar() {
+  // abrirModalImportar(modoExtrato?, contaExtrato?)
+  function abrirModalImportar(modoExtrato, contaExtrato) {
     imp.arquivo = null;
     imp.lancamentos = [];
     imp.etapa = 1;
+    imp.modoExtrato   = !!modoExtrato;
+    imp.contaExtrato  = contaExtrato || "";
     $("#extrato-input").value = "";
     $("#extrato-arquivo-info").style.display = "none";
     $("#btn-importar-avancar").disabled = true;
@@ -1262,15 +1360,22 @@
     $("#importar-etapa-1").style.display = n === 1 ? "block" : "none";
     $("#importar-etapa-2").style.display = n === 2 ? "block" : "none";
     $("#importar-etapa-3").style.display = n === 3 ? "block" : "none";
+    const prefixo = imp.modoExtrato ? "Extrato " + (imp.contaExtrato || "bancário") + " — " : "";
     $("#importar-titulo").textContent = (
-      n === 1 ? "Importar extrato bancário"
-      : n === 2 ? "Revisar lançamentos detectados"
-      : "Importando…"
+      n === 1 ? prefixo + "Importar arquivo"
+      : n === 2 ? prefixo + "Revisar lançamentos detectados"
+      : (imp.modoExtrato ? "Salvando extrato…" : "Importando…")
     );
     $("#btn-importar-voltar").style.display = n === 2 ? "inline-block" : "none";
     $("#btn-importar-avancar").style.display = n === 3 ? "none" : "inline-block";
     if (n === 1) $("#btn-importar-avancar").textContent = "Avançar →";
-    if (n === 2) $("#btn-importar-avancar").textContent = "Importar selecionados";
+    if (n === 2) {
+      $("#btn-importar-avancar").textContent = "Importar selecionados";
+      // Reabilita o botão: processarExtrato() o deixou disabled durante o
+      // processamento e nunca reabilitava no caminho de sucesso (bug que
+      // travava o clique em "Importar selecionados").
+      $("#btn-importar-avancar").disabled = false;
+    }
   }
 
   function escolherArquivoExtrato(file) {
@@ -1324,7 +1429,17 @@
         selecionado: !filtrarComoIgnorar(l),
       }));
 
-      // Categorização automática via IA (em lote, uma chamada só)
+      // Modo extrato bancário: não categoriza (vai para aba Extrato, não para livro)
+      if (imp.modoExtrato) {
+        renderTabelaExtrato();
+        mostrarEtapaImport(2);
+        $("#importar-status").textContent = imp.contaExtrato
+          ? "Extrato " + imp.contaExtrato + " · revise e confirme."
+          : "Revise os lançamentos antes de salvar.";
+        return;
+      }
+
+      // Modo livro: categorização automática via IA (em lote, uma chamada só)
       $("#importar-status").textContent = "Categorizando com IA…";
       renderTabelaExtrato();
       mostrarEtapaImport(2);
@@ -1434,7 +1549,7 @@
       const data = parseDataBR(dataStr);
       if (!data) continue;
 
-      const descricao = (idx.desc >= 0 ? cols[idx.desc] : (cols[idx.data + 1] || ""))
+      let descricao = (idx.desc >= 0 ? cols[idx.desc] : (cols[idx.data + 1] || ""))
         || "Lançamento CSV";
 
       let valor = 0, tipo = "";
@@ -1449,8 +1564,18 @@
         if (valor === 0) continue;
         tipo = valor < 0 ? "saida" : "entrada";
       } else {
-        // Último recurso: assume última coluna como valor
-        valor = parseValorBR(cols[cols.length - 1]);
+        // Sem coluna de valor explícita. Muitos extratos (ex.: Sicredi) trazem
+        // só uma coluna de SALDO acumulado e embutem o valor real no FIM da
+        // descrição, ex.: "RESG/VENCO CDB 1261462 55.000,00" ou "IOF ... -20,64".
+        // Preferimos extrair o valor do fim da descrição (e o tiramos do texto);
+        // só caímos na última coluna se não houver número monetário na descrição.
+        const ext = extrairValorDaDescricao(descricao);
+        if (ext.valor !== 0) {
+          valor = ext.valor;
+          descricao = ext.descricao;
+        } else {
+          valor = parseValorBR(cols[cols.length - 1]);
+        }
         if (valor === 0) continue;
         tipo = valor < 0 ? "saida" : "entrada";
       }
@@ -1506,6 +1631,21 @@
     const n = parseFloat(s);
     if (isNaN(n)) return 0;
     return neg ? -n : n;
+  }
+
+  /** Extrai o ÚLTIMO valor monetário do FIM de uma descrição (formato BR), com
+   *  sinal opcional, e devolve a descrição sem esse valor.
+   *  Ex.: "RESG/VENCO CDB 1261462 55.000,00" -> { valor: 55000, descricao: "RESG/VENCO CDB 1261462" }
+   *       "IOF S/ UTILIZACAO LIMITE 4102474 -20,64" -> { valor: -20.64, descricao: "IOF S/ UTILIZACAO LIMITE 4102474" }
+   *  Exige 2 casas decimais com vírgula para evitar pegar número de documento por engano. */
+  function extrairValorDaDescricao(desc) {
+    if (!desc) return { valor: 0, descricao: desc };
+    const m = String(desc).match(/(-?\s*\d{1,3}(?:\.\d{3})*,\d{2}|-?\s*\d+,\d{2})\s*$/);
+    if (!m) return { valor: 0, descricao: desc };
+    const valor = parseValorBR(m[1]);
+    if (valor === 0) return { valor: 0, descricao: desc };
+    const limpa = desc.slice(0, m.index).trim();
+    return { valor: valor, descricao: limpa || desc };
   }
 
   /** PDF — extrai todo o texto via pdf.js e tenta detectar lançamentos
@@ -1660,8 +1800,40 @@
     if (aSelecionados.length === 0) { toast("Nada marcado pra importar.", true); return; }
 
     mostrarEtapaImport(3);
-    $("#importar-progresso").innerHTML = `<div class="spinner" style="margin:0 auto 12px"></div>Importando ${aSelecionados.length} lançamento(s)…`;
+    $("#importar-progresso").innerHTML = `<div class="spinner" style="margin:0 auto 12px"></div>${imp.modoExtrato ? "Salvando extrato…" : "Importando"} ${aSelecionados.length} lançamento(s)…`;
 
+    // ── Modo extrato bancário: salva na aba Extrato ──
+    if (imp.modoExtrato) {
+      try {
+        const lancamentos = aSelecionados.map(l => ({
+          data: l.data,
+          descricao: l.descricao,
+          valor: l.valor,
+          tipo: l.tipo === "entrada" ? "credito" : "debito",
+        }));
+        const r = await apiPost("extrato-salvar-lote", { conta: imp.contaExtrato, lancamentos });
+        const criados = r.criados || 0;
+        $("#importar-progresso").innerHTML =
+          `<div style="font-size:42px; color:var(--pos); margin-bottom:14px">✓</div>` +
+          `<div style="font-size:16px; font-weight:600; margin-bottom:8px">Extrato salvo</div>` +
+          `<div style="color:var(--ink-3); font-size:13px">${criados} lançamento(s) do extrato ${imp.contaExtrato} gravados.</div>`;
+        setTimeout(async () => {
+          fecharModalImportar();
+          toast(`${criados} lançamento(s) do extrato ${imp.contaExtrato} salvos.`);
+          await carregarTudo();
+        }, 1600);
+      } catch (err) {
+        $("#importar-progresso").innerHTML =
+          `<div style="font-size:42px; color:var(--neg); margin-bottom:14px">✗</div>` +
+          `<div style="font-size:14px; color:var(--neg); margin-bottom:8px">Erro ao salvar extrato</div>` +
+          `<div style="color:var(--ink-3); font-size:13px">${escapeHtml(err.message)}</div>` +
+          `<button class="btn btn-ghost" id="btn-importar-tentar-novamente" style="margin-top:18px">Voltar à revisão</button>`;
+        $("#btn-importar-tentar-novamente").addEventListener("click", () => mostrarEtapaImport(2));
+      }
+      return;
+    }
+
+    // ── Modo livro: salva em Entradas/Saídas ──
     // Separar por aba (entradas / saídas)
     const entradas = aSelecionados.filter(l => l.tipo === "entrada").map(l => ({
       data: l.data, descricao: l.descricao, valor: l.valor, categoria: l.categoria,
@@ -1699,6 +1871,179 @@
         `<button class="btn btn-ghost" id="btn-importar-tentar-novamente" style="margin-top:18px">Voltar à revisão</button>`;
       $("#btn-importar-tentar-novamente").addEventListener("click", () => mostrarEtapaImport(2));
     }
+  }
+
+  // ====== CONCILIAÇÃO BANCÁRIA ======
+
+  const _concState = { carregado: false };
+
+  function _popularSelectsConciliacao() {
+    const hoje = new Date();
+    const mesEl = $("#conc-mes");
+    const anoEl = $("#conc-ano");
+    if (!mesEl || !anoEl) return;
+
+    if (!mesEl.options.length) {
+      const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      MESES.forEach((m, i) => {
+        const o = document.createElement("option");
+        o.value = i + 1; o.textContent = m;
+        mesEl.appendChild(o);
+      });
+    }
+
+    const anos = [...new Set(
+      state.entradas.concat(state.saidas).map(x => x.ano).filter(Boolean)
+    )].sort((a, b) => b - a);
+    if (!anos.length) anos.push(hoje.getFullYear());
+    const anoAtual = parseInt(anoEl.value) || 0;
+    anoEl.innerHTML = "";
+    anos.forEach(a => {
+      const o = document.createElement("option");
+      o.value = a; o.textContent = a;
+      anoEl.appendChild(o);
+    });
+    if (anoAtual && anos.includes(anoAtual)) anoEl.value = anoAtual;
+    else anoEl.value = hoje.getFullYear();
+
+    if (!mesEl.value) mesEl.value = hoje.getMonth() + 1;
+  }
+
+  async function carregarConciliacao() {
+    _popularSelectsConciliacao();
+    const conta = $("#conc-conta").value;
+    const ano   = parseInt($("#conc-ano").value);
+    const mes   = parseInt($("#conc-mes").value);
+    if (!conta || !ano || !mes) return;
+
+    $("#conc-empty").style.display = "none";
+    $("#conc-tabela-wrap").style.display = "none";
+    $("#conc-stats").style.display = "none";
+    $("#conc-loader").style.display = "flex";
+
+    try {
+      const extratoResp = await apiGet({ aba: "extrato", conta, ano, mes });
+      const extratoItems = extratoResp.dados || [];
+
+      // Lançamentos do livro para o período (do state já carregado)
+      const livroEntradas = state.entradas.filter(
+        e => e.ano === ano && e.mes === mes && e.categoria !== "Saldo Mês Anterior"
+      );
+      const livroSaidas = state.saidas.filter(s => s.ano === ano && s.mes === mes);
+
+      $("#conc-loader").style.display = "none";
+
+      if (extratoItems.length === 0) {
+        $("#conc-empty").style.display = "block";
+        return;
+      }
+
+      renderConciliacao(extratoItems, livroEntradas, livroSaidas);
+      _concState.carregado = true;
+    } catch (err) {
+      $("#conc-loader").style.display = "none";
+      toast("Erro ao carregar extrato: " + err.message, true);
+    }
+  }
+
+  function renderConciliacao(extratoItems, livroEntradas, livroSaidas) {
+    // Agrupa lançamentos por data
+    const todasDatas = new Set([
+      ...extratoItems.map(i => i.data),
+      ...livroEntradas.map(i => i.data),
+      ...livroSaidas.map(i => i.data),
+    ]);
+    const datasOrdenadas = [...todasDatas].filter(Boolean).sort();
+
+    let saldoLivro = 0, saldoExtrato = 0;
+    let diasDivergentes = 0;
+
+    const html = datasOrdenadas.map(data => {
+      const entradasDia = livroEntradas.filter(e => e.data === data);
+      const saidasDia   = livroSaidas.filter(s => s.data === data);
+      const extratoDia  = extratoItems.filter(e => e.data === data);
+
+      const movLivro   = entradasDia.reduce((s, e) => s + (e.valor || 0), 0)
+                       - saidasDia.reduce((s, e) => s + (e.valor || 0), 0);
+      const movExtrato = extratoDia.reduce((s, e) => {
+        return s + (e.tipo === "credito" ? (e.valor || 0) : -(e.valor || 0));
+      }, 0);
+
+      saldoLivro   += movLivro;
+      saldoExtrato += movExtrato;
+
+      // Classifica o status do dia
+      const temLivro   = entradasDia.length > 0 || saidasDia.length > 0;
+      const temExtrato = extratoDia.length > 0;
+      let status, rowClass;
+      if (!temExtrato) {
+        status = '<span class="conc-badge warn">só livro</span>';
+        rowClass = "conc-row-warn"; diasDivergentes++;
+      } else if (!temLivro) {
+        status = '<span class="conc-badge warn">só extrato</span>';
+        rowClass = "conc-row-warn"; diasDivergentes++;
+      } else if (Math.abs(movLivro - movExtrato) < 0.005) {
+        status = '<span class="conc-badge ok">✓ ok</span>';
+        rowClass = "conc-row-ok";
+      } else {
+        status = '<span class="conc-badge neg">diverge</span>';
+        rowClass = "conc-row-neg"; diasDivergentes++;
+      }
+
+      // Células de descrição
+      const livroDesc = [
+        ...entradasDia.map(e => `<span class="pos small-desc">${escapeHtml(e.descricao || "")} +${fmtBRL(e.valor)}</span>`),
+        ...saidasDia.map(s =>   `<span class="neg small-desc">${escapeHtml(s.descricao || "")} −${fmtBRL(s.valor)}</span>`),
+      ].join("") || '<span class="ink-muted">—</span>';
+
+      const extDesc = extratoDia.map(e =>
+        `<span class="${e.tipo === "credito" ? "pos" : "neg"} small-desc">${escapeHtml(e.descricao || "")} ${e.tipo === "credito" ? "+" : "−"}${fmtBRL(e.valor)}</span>`
+      ).join("") || '<span class="ink-muted">—</span>';
+
+      const fmtMov = (v) => v === 0 ? '<span class="ink-muted">—</span>'
+        : `<span class="${v > 0 ? "pos" : "neg"}">${v > 0 ? "+" : "−"}${fmtBRL(Math.abs(v))}</span>`;
+
+      return `<tr class="${rowClass}">
+        <td>${fmtData(data)}</td>
+        <td class="cell-desc">${livroDesc}</td>
+        <td class="col-valor">${fmtMov(movLivro)}</td>
+        <td class="col-valor">${fmtBRL(saldoLivro)}</td>
+        <td class="cell-desc">${extDesc}</td>
+        <td class="col-valor">${fmtMov(movExtrato)}</td>
+        <td class="col-valor">${fmtBRL(saldoExtrato)}</td>
+        <td style="text-align:center">${status}</td>
+      </tr>`;
+    }).join("");
+
+    $("#conc-tabela-body").innerHTML = html || `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--ink-3)">Sem movimentos no período.</td></tr>`;
+    $("#conc-tabela-wrap").style.display = "block";
+
+    // Atualiza KPIs
+    const diff = saldoLivro - saldoExtrato;
+    $("#conc-saldo-livro").textContent    = fmtBRL(saldoLivro);
+    $("#conc-saldo-extrato").textContent  = fmtBRL(saldoExtrato);
+    $("#conc-diferenca").textContent      = (diff >= 0 ? "+" : "") + fmtBRL(diff);
+    $("#conc-diferenca").className        = "stat-value " + (Math.abs(diff) < 0.005 ? "pos" : "neg");
+    $("#conc-divergentes").textContent    = diasDivergentes;
+    $("#conc-divergentes").className      = "stat-value " + (diasDivergentes === 0 ? "pos" : "neg");
+    $("#conc-stats").style.display        = "grid";
+  }
+
+  async function limparExtratoConciliacao() {
+    const conta = $("#conc-conta").value;
+    const ano   = parseInt($("#conc-ano").value);
+    const mes   = parseInt($("#conc-mes").value);
+    const mesNome = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][mes - 1] || mes;
+    if (!confirm(`Apagar o extrato ${conta} de ${mesNome}/${ano}? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const r = await apiPost("extrato-limpar", { conta, ano, mes });
+      toast(`${r.removidos} lançamento(s) do extrato removidos.`);
+      // Volta ao estado vazio
+      $("#conc-stats").style.display = "none";
+      $("#conc-tabela-wrap").style.display = "none";
+      $("#conc-empty").style.display = "block";
+      _concState.carregado = false;
+    } catch (err) { toast("Erro: " + err.message, true); }
   }
 
   function bindImportarEventos() {
@@ -1752,12 +2097,11 @@
   // ====== EXPORT / RELATÓRIO ======
   function abrirModalRelatorio() {
     const arr = dadosFiltrados();
-    if (!arr.length) { toast("Nenhum lançamento nos filtros atuais.", true); return; }
+    if (!arr.length) { toast("Nenhum extrato nos filtros atuais.", true); return; }
 
-    // Pré-preenche período do modal com o range atual dos dados filtrados
     const datas = arr.map(x => x.data).filter(Boolean).sort();
-    $("#relatorio-data-de").value = state.filtroDataDe || (datas.length ? datas[0] : "");
-    $("#relatorio-data-ate").value = state.filtroDataAte || (datas.length ? datas[datas.length - 1] : "");
+    $("#relatorio-data-de").value = state.extFiltro.dataDe || (datas.length ? datas[0] : "");
+    $("#relatorio-data-ate").value = state.extFiltro.dataAte || (datas.length ? datas[datas.length - 1] : "");
 
     atualizarResumoRelatorio();
     aplicarSugestoesTitulo();
@@ -1765,12 +2109,14 @@
   }
 
   function aplicarSugestoesTitulo() {
-    if (state.filtroBusca) {
-      $("#relatorio-titulo").value = `Movimentações ${state.filtroBusca.toUpperCase()} — Histórico filtrado`;
-    } else if (state.filtroCategoria) {
-      $("#relatorio-titulo").value = `Movimentações — ${state.filtroCategoria}`;
+    if (state.extFiltro.busca) {
+      $("#relatorio-titulo").value = `Extrato ${state.extFiltro.busca.toUpperCase()} — Histórico filtrado`;
+    } else if (state.extFiltro.categoria) {
+      $("#relatorio-titulo").value = `Extrato — ${state.extFiltro.categoria}`;
+    } else if (state.extFiltro.conta) {
+      $("#relatorio-titulo").value = `Extrato ${state.extFiltro.conta} — Breda Advocacia`;
     } else {
-      $("#relatorio-titulo").value = "Movimentações do escritório";
+      $("#relatorio-titulo").value = "Extratos bancários — Breda Advocacia";
     }
     const de = $("#relatorio-data-de").value;
     const ate = $("#relatorio-data-ate").value;
@@ -1796,27 +2142,25 @@
 
   function atualizarResumoRelatorio() {
     const arr = dadosParaRelatorio();
+    const f = state.extFiltro;
     const partes = [];
-    if (state.filtroBusca) partes.push(`busca: "${state.filtroBusca}"`);
-    if (state.filtroCategoria) partes.push(`categoria: ${state.filtroCategoria}`);
-    if (state.filtroAno) partes.push(`ano: ${state.filtroAno}`);
-    if (state.filtroMes) partes.push(`mês: ${MESES_PT[state.filtroMes - 1]}`);
+    if (f.busca)      partes.push(`busca: "${f.busca}"`);
+    if (f.categoria)  partes.push(`categoria: ${f.categoria}`);
+    if (f.conta)      partes.push(`conta: ${f.conta}`);
+    if (f.ano)        partes.push(`ano: ${f.ano}`);
+    if (f.mes)        partes.push(`mês: ${MESES_PT[(f.mes||1) - 1]}`);
     const de = $("#relatorio-data-de").value;
     const ate = $("#relatorio-data-ate").value;
     if (de || ate) partes.push(`período: ${de ? fmtData(de) : "início"} → ${ate ? fmtData(ate) : "hoje"}`);
-    const tipos = [];
-    if (state.filtroTipos.entrada) tipos.push("entradas");
-    if (state.filtroTipos.saida) tipos.push("saídas");
-    partes.push(`tipos: ${tipos.join(" + ") || "—"}`);
 
-    const totRec = arr.filter(x => x._t === "entrada").reduce((s,x) => s + (x.valor || 0), 0);
-    const totDes = arr.filter(x => x._t === "saida").reduce((s,x) => s + (x.valor || 0), 0);
+    const totCred = arr.filter(x => x.tipo === "credito").reduce((s,x) => s+(x.valor||0), 0);
+    const totDeb  = arr.filter(x => x.tipo === "debito" ).reduce((s,x) => s+(x.valor||0), 0);
 
     $("#relatorio-resumo").innerHTML =
-      `<strong>${arr.length}</strong> lançamento(s) serão incluídos.<br>` +
+      `<strong>${arr.length}</strong> transação(ões) serão incluídas.<br>` +
       `Filtros: <em>${partes.join(" · ") || "nenhum (todo o histórico)"}</em><br>` +
-      `Totais: <span class="pos" style="font-weight:600">${fmtBRL(totRec)}</span> em entradas · ` +
-      `<span class="neg" style="font-weight:600">${fmtBRL(totDes)}</span> em saídas`;
+      `Totais: <span class="pos" style="font-weight:600">+${fmtBRL(totCred)}</span> em créditos · ` +
+      `<span class="neg" style="font-weight:600">−${fmtBRL(totDeb)}</span> em débitos`;
   }
 
   function aplicarPresetRelatorio(preset) {
@@ -1866,8 +2210,8 @@
 
   function exportarCSV(titulo) {
     const arr = dadosParaRelatorio();
-    const cols = ["data","_t","descricao","valor","categoria","ano","mes"];
-    const head = ["data","tipo","descricao","valor","categoria","ano","mes"].join(";");
+    const cols = ["data","conta","tipo","descricao","valor","categoria","obs","status","ano","mes"];
+    const head = cols.join(";");
     const rows = arr.map(x => cols.map(c => {
       const v = x[c] == null ? "" : String(x[c]).replace(/"/g,'""');
       return /[;\n"]/.test(v) ? `"${v}"` : v;
@@ -1926,22 +2270,24 @@
     doc.setLineWidth(0.4);
     doc.line(W / 2 - 25, 67, W / 2 + 25, 67);
 
-    const totRec = arr.filter(x => x._t === "entrada").reduce((s, x) => s + (x.valor || 0), 0);
-    const totDes = arr.filter(x => x._t === "saida").reduce((s, x) => s + (x.valor || 0), 0);
+    const totRec = arr.filter(x => x.tipo === "credito").reduce((s, x) => s + (x.valor || 0), 0);
+    const totDes = arr.filter(x => x.tipo === "debito" ).reduce((s, x) => s + (x.valor || 0), 0);
     const saldo = totRec - totDes;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(90, 90, 80);
     const gerado = new Date().toLocaleString("pt-BR");
-    doc.text(`Gerado em ${gerado}  ·  ${arr.length} lançamento(s)`, W / 2, 74, { align: "center" });
+    doc.text(`Gerado em ${gerado}  ·  ${arr.length} transação(ões)`, W / 2, 74, { align: "center" });
 
+    const f = state.extFiltro;
     const filtros = [];
-    if (state.filtroBusca) filtros.push(`busca: "${state.filtroBusca}"`);
-    if (state.filtroCategoria) filtros.push(`categoria: ${state.filtroCategoria}`);
-    if (state.filtroAno) filtros.push(`ano: ${state.filtroAno}`);
-    if (state.filtroMes) filtros.push(`mês: ${MESES_PT[state.filtroMes - 1]}`);
-    if (state.filtroDataDe || state.filtroDataAte) filtros.push(`período: ${state.filtroDataDe || "início"} → ${state.filtroDataAte || "hoje"}`);
+    if (f.busca)     filtros.push(`busca: "${f.busca}"`);
+    if (f.categoria) filtros.push(`categoria: ${f.categoria}`);
+    if (f.conta)     filtros.push(`conta: ${f.conta}`);
+    if (f.ano)       filtros.push(`ano: ${f.ano}`);
+    if (f.mes)       filtros.push(`mês: ${MESES_PT[(f.mes||1)-1]}`);
+    if (f.dataDe || f.dataAte) filtros.push(`período: ${f.dataDe || "início"} → ${f.dataAte || "hoje"}`);
     if (filtros.length) {
       doc.setFontSize(8);
       doc.setTextColor(120, 115, 105);
@@ -1950,15 +2296,16 @@
 
     const body = arr.map(x => [
       fmtData(x.data),
-      x._t === "entrada" ? "E" : "S",
-      (x.descricao || "").slice(0, 70),
+      (x.conta || "—").slice(0, 8),
+      x.tipo === "credito" ? "C" : "D",
+      (x.descricao || "").slice(0, 65),
       x.categoria || "—",
-      { content: fmtBRL(x.valor || 0), styles: { halign: "right", textColor: x._t === "entrada" ? [45, 111, 68] : [150, 58, 61] } }
+      { content: (x.tipo === "credito" ? "+" : "−") + fmtBRL(x.valor || 0), styles: { halign: "right", textColor: x.tipo === "credito" ? [45, 111, 68] : [150, 58, 61] } }
     ]);
 
     doc.autoTable({
       startY: 86,
-      head: [["Data", "T", "Descrição", "Categoria", "Valor (R$)"]],
+      head: [["Data", "Conta", "T", "Descrição", "Categoria", "Valor (R$)"]],
       body: body,
       theme: "plain",
       styles: {
@@ -2037,13 +2384,13 @@
 
       const porCat = {};
       arr.forEach(x => {
-        const k = `${x._t}|${x.categoria || "—"}`;
+        const k = `${x.tipo}|${x.categoria || "—"}`;
         porCat[k] = (porCat[k] || 0) + (x.valor || 0);
       });
       const linhasCat = Object.entries(porCat)
         .map(([k, v]) => {
           const [tipo, cat] = k.split("|");
-          return [tipo === "entrada" ? "Entrada" : "Saída", cat, fmtBRL(v)];
+          return [tipo === "credito" ? "Crédito" : "Débito", cat, fmtBRL(v)];
         })
         .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
 
@@ -2195,44 +2542,80 @@
   }
 
   // ====== INIT ======
+  const _bind = (id, ev, fn) => { const el = $("#" + id); if (el) el.addEventListener(ev, fn); };
+
   function bindEvents() {
     $$(".tab").forEach(t => t.addEventListener("click", () => ativarTab(t.dataset.tab)));
 
-    // Movimentações
-    $("#filtro-ano").addEventListener("change", e => { state.filtroAno = e.target.value || null; renderMovimentacoes(); });
-    $("#filtro-mes").addEventListener("change", e => { state.filtroMes = e.target.value || null; renderMovimentacoes(); });
-    $("#filtro-busca").addEventListener("input", e => { state.filtroBusca = e.target.value; renderMovimentacoes(); });
-    $("#btn-limpar").addEventListener("click", () => {
-      state.filtroAno=null; state.filtroMes=null; state.filtroCategoria=null; state.filtroBusca="";
-      state.filtroTipos = {entrada:true, saida:true};
-      state.filtroDataDe = ""; state.filtroDataAte = "";
-      $("#filtro-ano").value=""; $("#filtro-mes").value=""; $("#filtro-busca").value="";
-      $("#filtro-data-de").value=""; $("#filtro-data-ate").value="";
-      renderMovimentacoes();
+    // ── Aba Extratos — filtros ──
+    const extRender = () => renderExtratos();
+    _bind("ext-filtro-conta",    "change", e => { state.extFiltro.conta    = e.target.value;  extRender(); });
+    _bind("ext-filtro-ano",      "change", e => { state.extFiltro.ano      = e.target.value || null; extRender(); });
+    _bind("ext-filtro-mes",      "change", e => { state.extFiltro.mes      = e.target.value || null; extRender(); });
+    _bind("ext-filtro-status",   "change", e => { state.extFiltro.status   = e.target.value;  extRender(); });
+    _bind("ext-filtro-busca",    "input",  e => { state.extFiltro.busca    = e.target.value;  extRender(); });
+    _bind("ext-filtro-data-de",  "change", e => { state.extFiltro.dataDe   = e.target.value;  extRender(); });
+    _bind("ext-filtro-data-ate", "change", e => { state.extFiltro.dataAte  = e.target.value;  extRender(); });
+    _bind("ext-btn-limpar", "click", () => {
+      state.extFiltro = { conta:"", ano:null, mes:null, status:"", busca:"", dataDe:"", dataAte:"", categoria:null };
+      ["ext-filtro-conta","ext-filtro-ano","ext-filtro-mes","ext-filtro-status","ext-filtro-busca","ext-filtro-data-de","ext-filtro-data-ate"]
+        .forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+      extRender();
     });
-    $("#btn-relatorio").addEventListener("click", abrirModalRelatorio);
-    bindImportarEventos();
-    $("#btn-fechar-relatorio").addEventListener("click", fecharModalRelatorio);
-    $("#btn-cancelar-relatorio").addEventListener("click", fecharModalRelatorio);
-    $("#btn-baixar-relatorio").addEventListener("click", gerarRelatorio);
-    $("#relatorio-modal").addEventListener("click", e => { if (e.target.id === "relatorio-modal") fecharModalRelatorio(); });
+    $$(".btn-ext-preset").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const hoje = new Date();
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        let de = "", ate = "";
+        switch (btn.dataset.preset) {
+          case "30d":   { const i = new Date(hoje); i.setDate(i.getDate()-30); de=fmt(i); ate=fmt(hoje); break; }
+          case "90d":   { const i = new Date(hoje); i.setDate(i.getDate()-90); de=fmt(i); ate=fmt(hoje); break; }
+          case "ano":   { de = hoje.getFullYear()+"-01-01"; ate = hoje.getFullYear()+"-12-31"; break; }
+          case "anoant":{ const y=hoje.getFullYear()-1; de=y+"-01-01"; ate=y+"-12-31"; break; }
+          case "tudo":  { de = ""; ate = ""; break; }
+        }
+        state.extFiltro.dataDe = de; state.extFiltro.dataAte = ate;
+        state.extFiltro.ano = null; state.extFiltro.mes = null;
+        const dDe = $("#ext-filtro-data-de"); if (dDe) dDe.value = de;
+        const dAte = $("#ext-filtro-data-ate"); if (dAte) dAte.value = ate;
+        const sAno = $("#ext-filtro-ano"); if (sAno) sAno.value = "";
+        const sMes = $("#ext-filtro-mes"); if (sMes) sMes.value = "";
+        extRender();
+      });
+    });
 
-    // Filtro de período próprio do modal de relatório
-    $("#relatorio-data-de").addEventListener("change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
-    $("#relatorio-data-ate").addEventListener("change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
-    $("#btn-relatorio-data-limpar").addEventListener("click", () => {
+    // Botão importar extrato (header de Contas + aba Extratos compartilham o mesmo modal)
+    _bind("btn-importar-extrato", "click", () => {
+      // Abre modal pedindo conta antes de abrir o importador
+      const conta = prompt("Qual conta importar?\nDigite: Inter  ou  Bradesco", "Inter");
+      if (!conta) return;
+      const contaNorm = conta.trim().charAt(0).toUpperCase() + conta.trim().slice(1).toLowerCase();
+      if (!["Inter","Bradesco"].includes(contaNorm)) { toast("Conta inválida. Use Inter ou Bradesco.", true); return; }
+      abrirModalImportar(true, contaNorm);
+    });
+
+    // Relatório extratos
+    _bind("ext-btn-relatorio", "click", () => {
+      const filtrados = extDadosFiltrados();
+      if (!filtrados.length) { toast("Nenhum extrato nos filtros atuais.", true); return; }
+      // Redireciona para o modal de relatório existente adaptado
+      abrirModalRelatorio(filtrados);
+    });
+
+    bindImportarEventos();
+    _bind("btn-fechar-relatorio",  "click", fecharModalRelatorio);
+    _bind("btn-cancelar-relatorio","click", fecharModalRelatorio);
+    _bind("btn-baixar-relatorio",  "click", gerarRelatorio);
+    $("#relatorio-modal").addEventListener("click", e => { if (e.target.id === "relatorio-modal") fecharModalRelatorio(); });
+    _bind("relatorio-data-de", "change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
+    _bind("relatorio-data-ate","change", () => { atualizarResumoRelatorio(); aplicarSugestoesTitulo(); });
+    _bind("btn-relatorio-data-limpar","click", () => {
       $("#relatorio-data-de").value = "";
       $("#relatorio-data-ate").value = "";
       atualizarResumoRelatorio();
       aplicarSugestoesTitulo();
     });
-    $$(".btn-rel-preset").forEach(btn => {
-      btn.addEventListener("click", () => aplicarPresetRelatorio(btn.dataset.preset));
-    });
-
-    // Período (range de datas)
-    $("#filtro-data-de").addEventListener("change", e => { state.filtroDataDe = e.target.value; renderMovimentacoes(); });
-    $("#filtro-data-ate").addEventListener("change", e => { state.filtroDataAte = e.target.value; renderMovimentacoes(); });
+    $$(".btn-rel-preset").forEach(btn => btn.addEventListener("click", () => aplicarPresetRelatorio(btn.dataset.preset)));
 
     // Presets de período
     $$(".btn-preset").forEach(btn => {
@@ -2273,18 +2656,17 @@
     }));
 
     // Análise
-    $("#ano-analise").addEventListener("change", e => { state.anoAnalise = parseInt(e.target.value,10); renderAnalise(); });
+    _bind("ano-analise", "change", e => { state.anoAnalise = parseInt(e.target.value,10); renderAnalise(); });
 
-    // Modal
-    $("#fab-novo").addEventListener("click", abrirModalNovo);
-    $("#btn-fechar-modal").addEventListener("click", fecharModal);
-    $("#btn-cancelar").addEventListener("click", fecharModal);
-    $("#btn-deletar").addEventListener("click", deletarLancamento);
-    $("#modal-form").addEventListener("submit", salvarLancamento);
-    $("#modal").addEventListener("click", e => { if (e.target.id === "modal") fecharModal(); });
-    $("#modal-anexo-input").addEventListener("change", e => { uploadArquivos(Array.from(e.target.files)); e.target.value=""; });
-    $("#modal-desc").addEventListener("input", sugerirCategoria);
-    $("#modal-tipo").addEventListener("change", () => popularSelectCategorias($("#modal-tipo").value));
+    // Modal de lançamento (mantido para possível uso futuro; FAB removido)
+    _bind("btn-fechar-modal", "click", fecharModal);
+    _bind("btn-cancelar",     "click", fecharModal);
+    _bind("btn-deletar",      "click", deletarLancamento);
+    _bind("modal-form",       "submit", salvarLancamento);
+    $("#modal") && $("#modal").addEventListener("click", e => { if (e.target.id === "modal") fecharModal(); });
+    _bind("modal-anexo-input","change", e => { uploadArquivos(Array.from(e.target.files)); e.target.value=""; });
+    _bind("modal-desc","input", sugerirCategoria);
+    _bind("modal-tipo","change", () => popularSelectCategorias($("#modal-tipo").value));
 
     // Drawer
     $("#btn-config").addEventListener("click", abrirDrawer);
@@ -2296,16 +2678,7 @@
     // Trocar senha
     $("#btn-trocar-senha").addEventListener("click", () => { fecharDrawer(); abrirTrocar(); });
 
-    // Toggle de segurança: exigir login a cada abertura
-    $("#toggle-sempre-login").addEventListener("change", e => {
-      if (e.target.checked) {
-        localStorage.setItem(LS_SEMPRE_LOGIN, "1");
-        toast("Login será exigido a cada abertura do app.");
-      } else {
-        localStorage.removeItem(LS_SEMPRE_LOGIN);
-        toast("Sessão de 24h restaurada.");
-      }
-    });
+    // Sessão de 1 hora — sem toggle (comportamento fixo)
     $("#btn-fechar-trocar").addEventListener("click", fecharTrocar);
     $("#btn-cancelar-trocar").addEventListener("click", fecharTrocar);
     $("#trocar-form").addEventListener("submit", salvarNovaSenha);
@@ -2313,7 +2686,8 @@
 
     // Chat
     $("#chat-send").addEventListener("click", chatEnviar);
-    $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter") chatEnviar(); });
+
+    _bind("chat-input","keydown", e => { if (e.key === "Enter") chatEnviar(); });
 
     // Login 2FA
     $("#login-step1").addEventListener("submit", loginStep1);
@@ -2333,18 +2707,31 @@
     $("#btn-anom-desel-todos").addEventListener("click", () => { $$(".anom-check").forEach(c => c.checked = false); $("#anom-todos").checked = false; });
     $("#anomalias-modal").addEventListener("click", e => { if (e.target.id === "anomalias-modal") fecharAnomalias(); });
 
+    // Conciliação
+    const _bindConc = (id, fn) => { const el = $("#" + id); if (el) el.addEventListener("click", fn); };
+    _bindConc("btn-conc-atualizar", () => carregarConciliacao());
+    _bindConc("btn-conc-limpar",    () => limparExtratoConciliacao());
+    _bindConc("btn-conc-importar",  () => {
+      const conta = $("#conc-conta").value;
+      abrirModalImportar(true, conta);
+    });
+    const _concFiltros = ["conc-conta","conc-mes","conc-ano"];
+    _concFiltros.forEach(id => {
+      const el = $("#" + id); if (el) el.addEventListener("change", () => _concState.carregado = false);
+    });
+
     // Tab inicial via hash
     window.addEventListener("hashchange", () => {
-      const tab = location.hash.replace("#","") || "insights";
-      if (["insights","movimentacoes","analise"].includes(tab)) ativarTab(tab);
+      const tab = location.hash.replace("#","") || "contas";
+      if (["contas","extratos","analise"].includes(tab)) ativarTab(tab);
     });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    // Segurança extra: se o usuário ativou "exigir login a cada abertura",
-    // limpa o token de sessão ANTES de qualquer renderização. Mantém URL
-    // e flag — só descarta a sessão.
-    if (localStorage.getItem(LS_SEMPRE_LOGIN) === "1") {
+    // Sessão cliente de 1 hora: F5 dentro da janela mantém o login;
+    // após 1 hora, limpa o token e exige novo login.
+    const sessionTs = parseInt(localStorage.getItem(LS_SESSION_TS) || "0", 10);
+    if (state.token && (Date.now() - sessionTs) > SESSION_TTL_MS) {
       localStorage.removeItem(LS_TOK);
       localStorage.removeItem(LS_CACHE);
       localStorage.removeItem("caixaBredaIA_resumo");

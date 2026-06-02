@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Caixa · Breda Advocacia</title>
-  <meta name="theme-color" content="#0a1f3d" />
+  <meta name="theme-color" content="#8a6f1f" />
   <link rel="manifest" href="./assets/manifest.json" />
   <link rel="icon" href="./assets/icons/icon-192.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.svg" />
@@ -19,12 +19,15 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <span class="brand-mark">Caixa</span>
-      <span class="brand-name">Breda Advocacia</span>
+      <div class="brand-logo"></div>
+      <div class="brand-text">
+        <span class="brand-mark">Caixa</span>
+        <span class="brand-name">Breda Advocacia</span>
+      </div>
     </div>
     <div class="tabs" role="tablist">
-      <button class="tab" data-tab="insights" role="tab">Insights</button>
-      <button class="tab" data-tab="movimentacoes" role="tab">Movimentações</button>
+      <button class="tab" data-tab="contas" role="tab">Contas</button>
+      <button class="tab" data-tab="extratos" role="tab">Extratos</button>
       <button class="tab" data-tab="analise" role="tab">Análise</button>
     </div>
     <div class="header-actions">
@@ -40,60 +43,58 @@
 
 <main>
 
-<!-- ─────── TAB: INSIGHTS ─────── -->
-<div data-tab-content="insights">
+<!-- ─────── TAB: CONTAS ─────── -->
+<div data-tab-content="contas">
+  <!-- Cards por banco -->
   <div class="section">
     <div class="section-head">
       <div class="section-title-wrap">
-        <div class="section-title">Visão geral</div>
-        <div class="section-sub">desempenho do mês atual</div>
+        <div class="section-title">Contas bancárias</div>
+        <div class="section-sub" id="contas-periodo">saldo apurado pelo extrato importado</div>
       </div>
-      <div class="section-meta" id="periodo-atual">—</div>
+      <div class="section-meta">
+        <button class="btn btn-primary" id="btn-importar-extrato" style="font-size:12px; padding:7px 14px">📥 Importar extrato</button>
+      </div>
+    </div>
+    <div id="contas-cards" class="contas-grid">
+      <div class="conta-card-skel"><div class="skel skel-line" style="height:80px; border-radius:10px"></div></div>
+      <div class="conta-card-skel"><div class="skel skel-line" style="height:80px; border-radius:10px"></div></div>
+    </div>
+  </div>
+
+  <!-- Total consolidado -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Consolidado</div>
+        <div class="section-sub">Inter + Bradesco — mês atual</div>
+      </div>
     </div>
     <div class="stats">
       <div class="stat">
-        <div class="stat-head">
-          <div class="stat-label">Receita</div>
-          <div class="stat-icon pos">
-            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 14l5-5 5 5M12 19V9"/></svg>
-          </div>
-        </div>
-        <div class="stat-value pos" id="stat-receita-mes">—</div>
-        <div class="stat-sub" id="stat-receita-sub">—</div>
+        <div class="stat-head"><div class="stat-label">Créditos</div><div class="stat-icon pos"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 14l5-5 5 5M12 19V9"/></svg></div></div>
+        <div class="stat-value pos" id="stat-creditos-total">—</div>
+        <div class="stat-sub" id="stat-creditos-sub">—</div>
       </div>
       <div class="stat">
-        <div class="stat-head">
-          <div class="stat-label">Despesa</div>
-          <div class="stat-icon neg">
-            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 10l5 5 5-5M12 5v10"/></svg>
-          </div>
-        </div>
-        <div class="stat-value neg" id="stat-despesa-mes">—</div>
-        <div class="stat-sub" id="stat-despesa-sub">—</div>
+        <div class="stat-head"><div class="stat-label">Débitos</div><div class="stat-icon neg"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M7 10l5 5 5-5M12 5v10"/></svg></div></div>
+        <div class="stat-value neg" id="stat-debitos-total">—</div>
+        <div class="stat-sub" id="stat-debitos-sub">—</div>
       </div>
       <div class="stat">
-        <div class="stat-head">
-          <div class="stat-label">Saldo</div>
-          <div class="stat-icon neutral">
-            <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 12h18M12 3v18"/></svg>
-          </div>
-        </div>
-        <div class="stat-value" id="stat-saldo-mes">—</div>
-        <div class="stat-sub" id="stat-saldo-sub">—</div>
+        <div class="stat-head"><div class="stat-label">Saldo total</div><div class="stat-icon neutral"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 12h18M12 3v18"/></svg></div></div>
+        <div class="stat-value" id="stat-saldo-total">—</div>
+        <div class="stat-sub">créditos − débitos</div>
       </div>
       <div class="stat">
-        <div class="stat-head">
-          <div class="stat-label">Margem</div>
-          <div class="stat-icon neutral">
-            <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-          </div>
-        </div>
-        <div class="stat-value" id="stat-margem">—</div>
-        <div class="stat-sub">resultado / receita</div>
+        <div class="stat-head"><div class="stat-label">Pendentes</div></div>
+        <div class="stat-value" id="stat-pendentes">—</div>
+        <div class="stat-sub">sem categoria</div>
       </div>
     </div>
   </div>
 
+  <!-- Alertas + IA -->
   <div class="section">
     <div class="section-head">
       <div class="section-title-wrap">
@@ -111,14 +112,11 @@
     <div class="section-head">
       <div class="section-title-wrap">
         <div class="section-title">Resumo executivo</div>
-        <div class="section-sub">análise do mês mais recente</div>
+        <div class="section-sub">análise baseada no extrato bancário</div>
       </div>
     </div>
     <div class="ai-block">
-      <div class="ai-head">
-        <div class="ai-badge">IA</div>
-        <div class="ai-title">Síntese do mês</div>
-      </div>
+      <div class="ai-head"><div class="ai-badge">IA</div><div class="ai-title">Síntese do mês</div></div>
       <div class="ai-text" id="resumo-ia"><span class="ai-loading">Analisando dados…</span></div>
     </div>
   </div>
@@ -127,100 +125,113 @@
     <div class="section-head">
       <div class="section-title-wrap">
         <div class="section-title">Pergunte ao seu caixa</div>
-        <div class="section-sub">conversa em linguagem natural com os dados</div>
+        <div class="section-sub">conversa em linguagem natural com os dados do extrato</div>
       </div>
     </div>
     <div class="chat-box">
       <div class="chat-log" id="chat-log"></div>
       <div class="chat-input-row">
-        <input type="text" class="chat-input" id="chat-input" placeholder="ex: qual cliente paga mais? como foi maio vs abril?" />
+        <input type="text" class="chat-input" id="chat-input" placeholder="ex: qual banco recebeu mais? como foi maio vs abril?" />
         <button class="chat-send" id="chat-send">Perguntar</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ─────── TAB: MOVIMENTAÇÕES ─────── -->
-<div data-tab-content="movimentacoes" hidden>
+<!-- ─────── TAB: EXTRATOS ─────── -->
+<div data-tab-content="extratos" hidden>
   <div class="section">
     <div class="section-head">
       <div class="section-title-wrap">
-        <div class="section-title">Lançamentos</div>
-        <div class="section-sub">filtre, busque e edite cada registro</div>
+        <div class="section-title">Extratos bancários</div>
+        <div class="section-sub">transações importadas — Inter e Bradesco</div>
       </div>
-      <div class="section-meta" id="tabela-meta">—</div>
+      <div class="section-meta" id="ext-tabela-meta">—</div>
     </div>
-    <div class="filters">
-      <div class="chips">
-        <button class="chip tipo-entrada active" data-tipo="entrada">Entradas</button>
-        <button class="chip tipo-saida active" data-tipo="saida">Saídas</button>
-      </div>
-    </div>
+
     <div class="filters">
       <div class="field-inline">
+        <label>Conta</label>
+        <select id="ext-filtro-conta">
+          <option value="">Todas</option>
+          <option value="Inter">Inter</option>
+          <option value="Bradesco">Bradesco</option>
+        </select>
+      </div>
+      <div class="field-inline">
         <label>Ano</label>
-        <select id="filtro-ano"></select>
+        <select id="ext-filtro-ano"></select>
       </div>
       <div class="field-inline">
         <label>Mês</label>
-        <select id="filtro-mes"></select>
+        <select id="ext-filtro-mes"></select>
+      </div>
+      <div class="field-inline">
+        <label>Status</label>
+        <select id="ext-filtro-status">
+          <option value="">Todos</option>
+          <option value="pendente">Pendente</option>
+          <option value="ok">OK</option>
+          <option value="ignorar">Ignorar</option>
+        </select>
       </div>
       <div class="field-inline search-wrap">
-        <label>Buscar descrição</label>
-        <input class="input" id="filtro-busca" type="text" placeholder="ex: honorários, VIVO, sucumbência…" />
+        <label>Buscar</label>
+        <input class="input" id="ext-filtro-busca" type="text" placeholder="descrição, categoria…" />
       </div>
       <div class="field-inline">
         <label>&nbsp;</label>
-        <button class="btn btn-ghost" id="btn-limpar">Limpar filtros</button>
+        <button class="btn btn-ghost" id="ext-btn-limpar">Limpar</button>
       </div>
       <div class="field-inline">
         <label>&nbsp;</label>
-        <button class="btn btn-ghost" id="btn-importar-extrato">📥 Importar extrato</button>
-      </div>
-      <div class="field-inline">
-        <label>&nbsp;</label>
-        <button class="btn btn-primary" id="btn-relatorio">📄 Gerar relatório</button>
+        <button class="btn btn-primary" id="ext-btn-relatorio">📄 Relatório</button>
       </div>
     </div>
+
     <div class="filters" style="margin-top:-8px">
       <div class="field-inline" style="min-width:140px">
         <label>Período · de</label>
-        <input class="input" id="filtro-data-de" type="date" />
+        <input class="input" id="ext-filtro-data-de" type="date" />
       </div>
       <div class="field-inline" style="min-width:140px">
         <label>Período · até</label>
-        <input class="input" id="filtro-data-ate" type="date" />
+        <input class="input" id="ext-filtro-data-ate" type="date" />
       </div>
       <div class="field-inline" style="flex:1; min-width:160px">
         <label>&nbsp;</label>
         <div style="display:flex; gap:6px; flex-wrap:wrap">
-          <button class="btn btn-ghost btn-preset" data-preset="30d" style="padding:7px 11px; font-size:12px">Últ. 30 dias</button>
-          <button class="btn btn-ghost btn-preset" data-preset="90d" style="padding:7px 11px; font-size:12px">Últ. 90 dias</button>
-          <button class="btn btn-ghost btn-preset" data-preset="ano" style="padding:7px 11px; font-size:12px">Este ano</button>
-          <button class="btn btn-ghost btn-preset" data-preset="anoant" style="padding:7px 11px; font-size:12px">Ano anterior</button>
-          <button class="btn btn-ghost btn-preset" data-preset="tudo" style="padding:7px 11px; font-size:12px">Tudo</button>
+          <button class="btn btn-ghost btn-ext-preset" data-preset="30d"    style="padding:7px 11px; font-size:12px">Últ. 30 dias</button>
+          <button class="btn btn-ghost btn-ext-preset" data-preset="90d"    style="padding:7px 11px; font-size:12px">Últ. 90 dias</button>
+          <button class="btn btn-ghost btn-ext-preset" data-preset="ano"    style="padding:7px 11px; font-size:12px">Este ano</button>
+          <button class="btn btn-ghost btn-ext-preset" data-preset="anoant" style="padding:7px 11px; font-size:12px">Ano anterior</button>
+          <button class="btn btn-ghost btn-ext-preset" data-preset="tudo"   style="padding:7px 11px; font-size:12px">Tudo</button>
         </div>
       </div>
     </div>
-    <div class="chips" id="chips-categorias"></div>
 
-    <div id="loader-mov" class="loader" style="display:none">
-      <div class="spinner"></div><span>Carregando lançamentos…</span>
+    <div class="chips" id="ext-chips-categorias"></div>
+
+    <div id="ext-loader" class="loader" style="display:none">
+      <div class="spinner"></div><span>Carregando extratos…</span>
     </div>
 
-    <div class="tbl-wrap" id="tabela-card">
+    <div class="tbl-wrap" id="ext-tabela-card">
       <div class="tbl-scroll">
         <table>
           <thead>
             <tr>
-              <th style="width:100px">Data</th>
-              <th style="width:70px">Tipo</th>
+              <th style="width:92px">Data</th>
+              <th style="width:80px">Conta</th>
+              <th style="width:54px">Tipo</th>
               <th>Descrição</th>
-              <th>Categoria</th>
-              <th style="text-align:right; width:140px">Valor</th>
+              <th style="width:160px">Categoria</th>
+              <th style="text-align:right; width:130px">Valor</th>
+              <th style="width:72px; text-align:center">Status</th>
+              <th style="width:40px"></th>
             </tr>
           </thead>
-          <tbody id="tabela-body"></tbody>
+          <tbody id="ext-tabela-body"></tbody>
         </table>
       </div>
     </div>
@@ -327,12 +338,113 @@
   </div>
 </div>
 
+<!-- ─────── TAB: CONCILIAÇÃO (removida — modelo substituído) ─────── -->
+<div data-tab-content="conciliacao" hidden style="display:none!important">
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title-wrap">
+        <div class="section-title">Conciliação Bancária</div>
+        <div class="section-sub">compare o livro caixa com o extrato do banco</div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="field-inline">
+        <label>Conta</label>
+        <select id="conc-conta">
+          <option value="Inter">Inter</option>
+          <option value="Bradesco">Bradesco</option>
+        </select>
+      </div>
+      <div class="field-inline">
+        <label>Mês</label>
+        <select id="conc-mes"></select>
+      </div>
+      <div class="field-inline">
+        <label>Ano</label>
+        <select id="conc-ano"></select>
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-conc-importar">📥 Importar extrato</button>
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-conc-limpar" title="Apaga o extrato importado deste mês/conta">🗑 Limpar extrato</button>
+      </div>
+      <div class="field-inline">
+        <label>&nbsp;</label>
+        <button class="btn btn-ghost" id="btn-conc-atualizar">↺ Atualizar</button>
+      </div>
+    </div>
+
+    <!-- KPIs da conciliação -->
+    <div class="stats" id="conc-stats" style="display:none">
+      <div class="stat">
+        <div class="stat-head"><div class="stat-label">Saldo livro</div></div>
+        <div class="stat-value" id="conc-saldo-livro">—</div>
+        <div class="stat-sub">acumulado no período</div>
+      </div>
+      <div class="stat">
+        <div class="stat-head"><div class="stat-label">Saldo extrato</div></div>
+        <div class="stat-value" id="conc-saldo-extrato">—</div>
+        <div class="stat-sub">acumulado no período</div>
+      </div>
+      <div class="stat">
+        <div class="stat-head"><div class="stat-label">Diferença</div></div>
+        <div class="stat-value" id="conc-diferenca">—</div>
+        <div class="stat-sub">livro − extrato</div>
+      </div>
+      <div class="stat">
+        <div class="stat-head"><div class="stat-label">Dias divergentes</div></div>
+        <div class="stat-value" id="conc-divergentes">—</div>
+        <div class="stat-sub">com saldo diferente</div>
+      </div>
+    </div>
+
+    <!-- Estado vazio (sem extrato importado) -->
+    <div id="conc-empty" style="padding:48px 20px; text-align:center; color:var(--ink-3)">
+      <div style="font-size:38px; margin-bottom:14px">🏦</div>
+      <div style="font-size:15px; font-weight:600; color:var(--ink-2); margin-bottom:6px">Nenhum extrato importado</div>
+      <div style="font-size:13px; line-height:1.6">Selecione a conta (Inter ou Bradesco) e o mês, depois clique em<br><strong>📥 Importar extrato</strong> para carregar o OFX ou CSV do banco.</div>
+    </div>
+
+    <!-- Loader -->
+    <div id="conc-loader" class="loader" style="display:none">
+      <div class="spinner"></div><span>Carregando conciliação…</span>
+    </div>
+
+    <!-- Tabela dia a dia -->
+    <div id="conc-tabela-wrap" style="display:none">
+      <div style="font-size:11px; color:var(--ink-3); margin-bottom:8px; line-height:1.5; padding:0 2px">
+        <strong>Verde</strong> = movimentos idênticos no livro e no extrato · <strong>Amarelo</strong> = só em um dos lados · <strong>Vermelho</strong> = divergência de valor
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+          <table class="tabela-conciliacao">
+            <thead>
+              <tr>
+                <th style="width:92px">Data</th>
+                <th>Livro caixa</th>
+                <th style="text-align:right; width:110px">Mov. livro</th>
+                <th style="text-align:right; width:118px">Saldo livro</th>
+                <th>Extrato banco</th>
+                <th style="text-align:right; width:110px">Mov. extrato</th>
+                <th style="text-align:right; width:118px">Saldo extrato</th>
+                <th style="text-align:center; width:86px">Status</th>
+              </tr>
+            </thead>
+            <tbody id="conc-tabela-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </main>
 
-<button class="fab" id="fab-novo">
-  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-  Novo lançamento
-</button>
+<!-- FAB removido — entrada de dados via importação de extrato -->
 
 <!-- MODAL LANÇAMENTO -->
 <div class="modal-backdrop" id="modal">
@@ -412,21 +524,17 @@
       <input id="drawer-url" type="url" readonly />
     </div>
 
-    <!-- Toggle: exigir login a cada abertura -->
-    <div class="security-toggle">
+    <!-- Sessão de 1 hora — informativo -->
+    <div class="security-toggle" style="cursor:default">
       <div class="security-toggle-info">
         <div class="security-toggle-title">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:5px">
-            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
           </svg>
-          Exigir login a cada abertura
+          Sessão de 1 hora
         </div>
-        <div class="security-toggle-desc">Mais seguro · sempre pede senha + código por e-mail ao abrir o app.</div>
+        <div class="security-toggle-desc">F5 mantém o login. Após 1 h sem atividade, pede senha novamente (sem código).</div>
       </div>
-      <label class="switch">
-        <input type="checkbox" id="toggle-sempre-login" />
-        <span class="switch-slider"></span>
-      </label>
     </div>
 
     <button class="btn btn-primary" id="btn-trocar-senha" style="width:100%; margin-top:8px">
@@ -544,39 +652,9 @@
 <!-- LOGIN 2FA (2 etapas) -->
 <div class="login-overlay" id="login-overlay">
   <div class="login-card">
-    <svg class="login-logo" viewBox="0 0 600 540" fill="none" aria-label="Breda Advocacia">
-      <defs>
-        <linearGradient id="aegisLoginGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#0a1f3d"/>
-          <stop offset="50%" stop-color="#1e3a8a"/>
-          <stop offset="100%" stop-color="#38bdf8"/>
-        </linearGradient>
-        <linearGradient id="aegisLoginInner" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <g transform="translate(225 25)">
-        <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegisLoginGrad)"/>
-        <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 100 L 0 100 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegisLoginInner)"/>
-        <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="none" stroke="#fbbf24" stroke-width="0.8" opacity="0.55"/>
-        <g fill="#ffffff">
-          <rect x="38" y="32" width="14" height="148" rx="2"/>
-          <path d="M 52 38 L 52 86 L 88 86 A 24 24 0 0 0 88 38 Z M 64 50 L 88 50 A 12 12 0 0 1 88 74 L 64 74 Z" fill-rule="evenodd"/>
-          <path d="M 52 92 L 52 152 L 96 152 A 30 30 0 0 0 96 92 Z M 64 104 L 96 104 A 18 18 0 0 1 96 140 L 64 140 Z" fill-rule="evenodd"/>
-          <rect x="20" y="86" width="110" height="2" rx="1" opacity="0.7"/>
-          <circle cx="22" cy="92" r="3.5" opacity="0.85"/>
-          <circle cx="128" cy="92" r="3.5" opacity="0.85"/>
-          <circle cx="75" cy="87" r="2.2" fill="#10b981"/>
-        </g>
-      </g>
-      <text x="300" y="350" text-anchor="middle" font-family="'Fraunces', serif" font-size="92" font-weight="700" fill="#0a1f3d" letter-spacing="2">BREDA</text>
-      <line x1="240" y1="380" x2="290" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
-      <line x1="310" y1="380" x2="360" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
-      <circle cx="300" cy="380" r="2" fill="#1e3a8a"/>
-      <text x="300" y="412" text-anchor="middle" font-family="'Inter', sans-serif" font-size="14" font-weight="500" fill="#1e3a8a" letter-spacing="8">SOCIEDADE DE ADVOGADOS</text>
-      <text x="300" y="448" text-anchor="middle" font-family="'Inter', sans-serif" font-size="10" font-weight="500" fill="#64748b" letter-spacing="4">CUIABÁ · MATO GROSSO</text>
-    </svg>
+    <!-- Logo oficial Breda. Se o arquivo não existir, cai no SVG vetorial. -->
+    <img class="login-logo" src="./assets/icons/logo-breda.jpg" alt="Breda · Sociedade de Advogados"
+         onerror="this.onerror=null; this.src='./assets/icons/logo-breda.svg';" />
     <div class="login-sub">Sistema de Caixa</div>
 
     <div class="login-msg" id="login-msg">&nbsp;</div>
@@ -638,22 +716,10 @@
       <div id="extrato-arquivo-info" style="display:none; margin-top:14px; padding:12px 14px; background:var(--surface-2); border-radius:8px; font-size:13px"></div>
 
       <div class="field" style="margin-top:18px">
-        <label>Os lançamentos detectados serão criados como:</label>
-        <div style="display:flex; gap:8px">
-          <label class="radio-card" style="flex:1">
-            <input type="radio" name="extrato-aba" value="saidas" checked />
-            <div class="radio-card-body">
-              <div class="radio-card-icon">↓</div>
-              <div>
-                <div class="radio-card-title">Saídas (despesas)</div>
-                <div class="radio-card-desc">Use pra extratos de conta corrente — vou separar entradas e saídas individualmente.</div>
-              </div>
-            </div>
-          </label>
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:12px 14px; background:var(--accent-bg); border-radius:8px; font-size:12px; color:var(--ink-3); line-height:1.5">
+          <span style="font-size:16px; line-height:1">⇅</span>
+          <span>O app identifica <strong>automaticamente</strong> cada lançamento do extrato: <strong>crédito → entrada (receita)</strong> e <strong>débito → saída (despesa)</strong>. Você confere tudo na próxima tela antes de confirmar.</span>
         </div>
-        <small style="color:var(--ink-4); font-size:11px; margin-top:6px; display:block">
-          O app detecta automaticamente o tipo de cada linha (crédito = entrada, débito = saída).
-        </small>
       </div>
     </div>
 
