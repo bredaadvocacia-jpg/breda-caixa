@@ -81,6 +81,7 @@
     charts: {},
     chatHistorico: [],
     _previsaoLoaded: false,
+    patrimonioVisivel: false,
   };
 
   // ====== HELPERS ======
@@ -679,6 +680,8 @@
         ? `saldo apurado pelo extrato importado · ${MESES_PT[agora.getMonth()]} ${agora.getFullYear()}`
         : "importe extratos OFX ou CSV do Inter e Bradesco";
     }
+
+    renderPatrimonio();
   }
 
   // ====== PATRIMÔNIO (base manual + saldo do mês, com olho de privacidade) ======
@@ -701,13 +704,13 @@
     if (!elValor) return;
     const elSub = $("#stat-patrimonio-sub");
     const elOlho = $("#btn-patrimonio-olho");
-    const base = getPatrimonioBase();
-    const saldo = state._saldoMesAtual || 0;
+    const base  = getPatrimonioBase();
+    const saldo = state.totalConsolidado ? state.totalConsolidado.saldo : 0;
     const total = base + saldo;
     if (state.patrimonioVisivel) {
       elValor.textContent = fmtBRL(total);
       elValor.className = "stat-value " + (total >= 0 ? "pos" : "neg");
-      if (elSub) elSub.textContent = "base " + fmtBRL(base) + " + mês " + fmtBRL(saldo);
+      if (elSub) elSub.textContent = "base " + fmtBRL(base) + " + saldo " + fmtBRL(saldo);
       if (elOlho) { elOlho.innerHTML = SVG_OLHO_ABERTO; elOlho.title = "Ocultar patrimônio"; }
     } else {
       elValor.textContent = "R$ ••••••";
@@ -2586,12 +2589,16 @@
 
     // Botão importar extrato (header de Contas + aba Extratos compartilham o mesmo modal)
     _bind("btn-importar-extrato", "click", () => {
-      // Abre modal pedindo conta antes de abrir o importador
-      const conta = prompt("Qual conta importar?\nDigite: Inter  ou  Bradesco", "Inter");
+      const conta = prompt("Qual conta importar?\n\nInter · Bradesco · Histórico", "Inter");
       if (!conta) return;
-      const contaNorm = conta.trim().charAt(0).toUpperCase() + conta.trim().slice(1).toLowerCase();
-      if (!["Inter","Bradesco"].includes(contaNorm)) { toast("Conta inválida. Use Inter ou Bradesco.", true); return; }
-      abrirModalImportar(true, contaNorm);
+      const t = conta.trim();
+      const contaNorm = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+      const CONTAS_VALIDAS = ["Inter","Bradesco","Histórico","Historico"];
+      if (!CONTAS_VALIDAS.some(c => c.toLowerCase() === contaNorm.toLowerCase())) {
+        toast("Conta inválida. Use: Inter, Bradesco ou Histórico.", true); return;
+      }
+      const contaFinal = contaNorm.toLowerCase() === "historico" ? "Histórico" : contaNorm;
+      abrirModalImportar(true, contaFinal);
     });
 
     // Relatório extratos
@@ -2688,6 +2695,10 @@
     $("#chat-send").addEventListener("click", chatEnviar);
 
     _bind("chat-input","keydown", e => { if (e.key === "Enter") chatEnviar(); });
+
+    // Patrimônio — olhinho e lápis
+    _bind("btn-patrimonio-olho",   "click", togglePatrimonio);
+    _bind("btn-patrimonio-editar", "click", editarPatrimonioBase);
 
     // Login 2FA
     $("#login-step1").addEventListener("submit", loginStep1);
