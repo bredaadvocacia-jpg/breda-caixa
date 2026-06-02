@@ -1,5 +1,5 @@
-/* Service Worker — Caixa Breda v20 (skeleton + 3 meses + cache server-side) */
-const CACHE = "caixa-breda-v20";
+/* Service Worker — Caixa Breda v23 (ícone de olho fechado/aberto no Patrimônio) */
+const CACHE = "caixa-breda-v23";
 const ASSETS = [
   "./",
   "./index.html",

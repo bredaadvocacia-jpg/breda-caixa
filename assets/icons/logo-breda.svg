@@ -1,34 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 540" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 560" fill="none">
   <defs>
-    <style>@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap');</style>
-    <linearGradient id="aegisFullGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0a1f3d"/>
-      <stop offset="50%" stop-color="#1e3a8a"/>
-      <stop offset="100%" stop-color="#38bdf8"/>
-    </linearGradient>
-    <linearGradient id="aegisFullInner" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&amp;display=swap');</style>
   </defs>
-  <g transform="translate(225 25)">
-    <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegisFullGrad)"/>
-    <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 100 L 0 100 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="url(#aegisFullInner)"/>
-    <path d="M 75 0 L 145 0 A 5 5 0 0 1 150 5 L 150 130 Q 150 165 110 195 L 75 215 L 40 195 Q 0 165 0 130 L 0 5 A 5 5 0 0 1 5 0 L 75 0 Z" fill="none" stroke="#fbbf24" stroke-width="0.8" opacity="0.55"/>
-    <g fill="#ffffff">
-      <rect x="38" y="32" width="14" height="148" rx="2"/>
-      <path d="M 52 38 L 52 86 L 88 86 A 24 24 0 0 0 88 38 Z M 64 50 L 88 50 A 12 12 0 0 1 88 74 L 64 74 Z" fill-rule="evenodd"/>
-      <path d="M 52 92 L 52 152 L 96 152 A 30 30 0 0 0 96 92 Z M 64 104 L 96 104 A 18 18 0 0 1 96 140 L 64 140 Z" fill-rule="evenodd"/>
-      <rect x="20" y="86" width="110" height="2" rx="1" opacity="0.7"/>
-      <circle cx="22" cy="92" r="3.5" opacity="0.85"/>
-      <circle cx="128" cy="92" r="3.5" opacity="0.85"/>
-      <circle cx="75" cy="87" r="2.2" fill="#10b981"/>
+  <!-- Marca: quadrado dourado + coluna/capitel em "B" -->
+  <g transform="translate(228 18)">
+    <rect width="144" height="144" rx="18" fill="#8a6f1f"/>
+    <g fill="#ffffff" transform="translate(12 12) scale(1.0)">
+      <path d="M28 8 h26 a23 23 0 0 1 0 46 H28 Z M42 22 h12 a8.5 8.5 0 0 1 0 17 h-12 Z" fill-rule="evenodd"/>
+      <rect x="8" y="50" width="104" height="8.5" rx="4.25"/>
+      <rect x="20" y="64" width="10" height="34" rx="3"/>
+      <rect x="35" y="64" width="10" height="34" rx="3"/>
+      <rect x="50" y="64" width="10" height="34" rx="3"/>
+      <rect x="65" y="64" width="10" height="34" rx="3"/>
+      <rect x="80" y="64" width="10" height="34" rx="3"/>
+      <rect x="12" y="102" width="96" height="8.5" rx="4.25"/>
     </g>
   </g>
-  <text x="300" y="350" text-anchor="middle" font-family="Fraunces, serif" font-size="92" font-weight="700" fill="#0a1f3d" letter-spacing="2">BREDA</text>
-  <line x1="240" y1="380" x2="290" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
-  <line x1="310" y1="380" x2="360" y2="380" stroke="#fbbf24" stroke-width="1" stroke-linecap="round"/>
-  <circle cx="300" cy="380" r="2" fill="#1e3a8a"/>
-  <text x="300" y="412" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="500" fill="#1e3a8a" letter-spacing="8">SOCIEDADE DE ADVOGADOS</text>
-  <text x="300" y="448" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="500" fill="#64748b" letter-spacing="4">CUIABÁ · MATO GROSSO</text>
+  <!-- Wordmark -->
+  <text x="300" y="285" text-anchor="middle" font-family="Inter, sans-serif" font-size="104" font-weight="800" fill="#2b2920" letter-spacing="6">BREDA</text>
+  <line x1="150" y1="330" x2="450" y2="330" stroke="#c2a14e" stroke-width="1.4"/>
+  <text x="300" y="372" text-anchor="middle" font-family="Inter, sans-serif" font-size="22" font-weight="600" fill="#3a3830" letter-spacing="11">SOCIEDADE DE ADVOGADOS</text>
 </svg>

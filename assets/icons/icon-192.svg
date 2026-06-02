@@ -1,25 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
-  <defs>
-    <linearGradient id="icoGrad192" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0a1f3d"/>
-      <stop offset="50%" stop-color="#1e3a8a"/>
-      <stop offset="100%" stop-color="#38bdf8"/>
-    </linearGradient>
-  </defs>
-  <rect width="192" height="192" rx="32" fill="#f8fafc"/>
-  <!-- Escudo aegis centralizado -->
-  <g transform="translate(33 12)">
-    <path d="M 63 0 L 122 0 A 4 4 0 0 1 126 4 L 126 110 Q 126 140 92 165 L 63 182 L 34 165 Q 0 140 0 110 L 0 4 A 4 4 0 0 1 4 0 L 63 0 Z" fill="url(#icoGrad192)"/>
-    <path d="M 63 0 L 122 0 A 4 4 0 0 1 126 4 L 126 85 L 0 85 L 0 4 A 4 4 0 0 1 4 0 L 63 0 Z" fill="#ffffff" opacity="0.15"/>
-    <path d="M 63 0 L 122 0 A 4 4 0 0 1 126 4 L 126 110 Q 126 140 92 165 L 63 182 L 34 165 Q 0 140 0 110 L 0 4 A 4 4 0 0 1 4 0 L 63 0 Z" fill="none" stroke="#fbbf24" stroke-width="0.7" opacity="0.55"/>
-    <g fill="#ffffff" transform="translate(0 4)">
-      <rect x="32" y="27" width="12" height="124" rx="1.7"/>
-      <path d="M 44 32 L 44 72 L 74 72 A 20 20 0 0 0 74 32 Z M 54 42 L 74 42 A 10 10 0 0 1 74 62 L 54 62 Z" fill-rule="evenodd"/>
-      <path d="M 44 77 L 44 127 L 81 127 A 25 25 0 0 0 81 77 Z M 54 87 L 81 87 A 15 15 0 0 1 81 117 L 54 117 Z" fill-rule="evenodd"/>
-      <rect x="17" y="72" width="92" height="1.7" rx="0.9" opacity="0.7"/>
-      <circle cx="19" cy="77" r="3" opacity="0.85"/>
-      <circle cx="107" cy="77" r="3" opacity="0.85"/>
-      <circle cx="63" cy="73" r="1.8" fill="#10b981"/>
-    </g>
+  <!-- Ícone PWA · marca Breda dourada (full-bleed p/ maskable) -->
+  <rect width="192" height="192" fill="#8a6f1f"/>
+  <g fill="#ffffff" transform="translate(36 30) scale(1.0)">
+    <!-- capitel / topo curvo (meia-volta estilo B) -->
+    <path d="M22 6 h34 a30 30 0 0 1 0 60 H22 Z M40 24 h16 a11 11 0 0 1 0 22 h-16 Z" fill-rule="evenodd"/>
+    <!-- ábaco -->
+    <rect x="6" y="62" width="102" height="11" rx="5.5"/>
+    <!-- fuste: flautas -->
+    <rect x="18" y="80" width="13" height="38" rx="4"/>
+    <rect x="37" y="80" width="13" height="38" rx="4"/>
+    <rect x="56" y="80" width="13" height="38" rx="4"/>
+    <rect x="75" y="80" width="13" height="38" rx="4"/>
+    <!-- base -->
+    <rect x="9" y="122" width="96" height="11" rx="5.5"/>
   </g>
 </svg>
