@@ -626,6 +626,20 @@
   }
 
   // ====== ABA CONTAS ======
+  function _periodoExtratos() {
+    if (!state.extratos.length) return "";
+    const datas = state.extratos.map(x => x.data).filter(Boolean).sort();
+    const de  = datas[0];
+    const ate = datas[datas.length - 1];
+    if (!de) return "";
+    const fmtMesAno = (iso) => {
+      const [y, m] = iso.split("-");
+      return MESES_PT[parseInt(m,10)-1].slice(0,3) + "/" + y;
+    };
+    if (de.slice(0,7) === ate.slice(0,7)) return fmtMesAno(de);
+    return fmtMesAno(de) + " a " + fmtMesAno(ate);
+  }
+
   function renderContas() {
     const contas = state.resumoContas;
     const total  = state.totalConsolidado;
@@ -666,20 +680,25 @@
     const pendEl = $("#stat-pendentes");
     if (pendEl) { pendEl.textContent = totalPend; pendEl.className = "stat-value " + (totalPend === 0 ? "pos" : "warn"); }
 
+    const periodo = _periodoExtratos();
+    const nomesContas = contas.map(c => c.conta).join(" + ") || "—";
+
     const subCred = $("#stat-creditos-sub");
-    if (subCred && contas.length) {
-      const agora = new Date();
-      const mesAtual = contas[0]; // pode ser aprimorado
-      subCred.textContent = `${MESES_PT[agora.getMonth()]} ${agora.getFullYear()}`;
-    }
+    if (subCred) subCred.textContent = periodo || "—";
+
+    const subDeb = $("#stat-debitos-sub");
+    if (subDeb) subDeb.textContent = periodo || "—";
 
     const periodoEl = $("#contas-periodo");
     if (periodoEl) {
-      const agora = new Date();
       periodoEl.textContent = contas.length
-        ? `saldo apurado pelo extrato importado · ${MESES_PT[agora.getMonth()]} ${agora.getFullYear()}`
-        : "importe extratos OFX ou CSV do Inter e Bradesco";
+        ? `saldo apurado pelo extrato importado · ${periodo}`
+        : "importe extratos OFX ou CSV do banco";
     }
+
+    // Atualiza o subtítulo da seção Consolidado dinamicamente
+    const subConsolidado = document.querySelector("[data-tab-content='contas'] .section:nth-child(2) .section-sub");
+    if (subConsolidado) subConsolidado.textContent = nomesContas + (periodo ? " · " + periodo : "");
 
     renderPatrimonio();
   }
